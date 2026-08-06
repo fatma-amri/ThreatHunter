@@ -81,6 +81,59 @@ class FeatureExtractor:
         return grouped.sort_values("distinct_ports", ascending=False)
 
     # ─────────────────────────────────────────────────────────
+    #  Features SSH BRUTE FORCE  (source: conn.log)
+    # ─────────────────────────────────────────────────────────
+    @staticmethod
+    def brute_force_features(conn: pd.DataFrame, port: int = 22) -> pd.DataFrame:
+        """
+        Pour chaque IP source, compte le nombre de tentatives de connexion
+        ECHOUEES vers un service (par defaut SSH, port 22).
+
+        Une attaque brute force enchaine de nombreuses connexions qui
+        echouent (mauvais mot de passe -> connexion rejetee ou avortee).
+        Dans Zeek, ces echecs correspondent a des conn_state comme
+        REJ (rejetee), S0 (pas de reponse) ou RSTO/RSTR.
+
+        Retourne :
+            src_ip | failed_attempts | dst_ip
+        """
+        cols = ["src_ip", "failed_attempts", "dst_ip"]
+        if conn is None or conn.empty:
+            return pd.DataFrame(columns=cols)
+
+        df = conn.copy()
+        col_src   = _first_col(df, ["id.orig_h", "orig_h", "src_ip"])
+        col_dst   = _first_col(df, ["id.resp_h", "resp_h", "dst_ip"])
+        col_port  = _first_col(df, ["id.resp_p", "resp_p", "dst_port"])
+        col_state = _first_col(df, ["conn_state", "state"])
+
+        if not (col_src and col_port):
+            return pd.DataFrame(columns=cols)
+
+        # 1. Ne garder que le trafic vers le port cible (22 par defaut)
+        df[col_port] = pd.to_numeric(df[col_port], errors="coerce")
+        df = df[df[col_port] == port]
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+
+        # 2. Ne garder que les connexions en ECHEC
+        failed_states = {"REJ", "S0", "RSTO", "RSTR", "RSTOS0", "SH"}
+        if col_state:
+            df = df[df[col_state].isin(failed_states)]
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+
+        # 3. Compter les echecs par source
+        grouped = (
+            df.groupby(col_src)
+              .agg(failed_attempts=(col_port, "size"),
+                   dst_ip=(col_dst, "first") if col_dst else (col_port, "size"))
+              .reset_index()
+              .rename(columns={col_src: "src_ip"})
+        )
+        return grouped.sort_values("failed_attempts", ascending=False)
+
+    # ─────────────────────────────────────────────────────────
     #  Features BEACONING  (source: conn.log)
     # ─────────────────────────────────────────────────────────
     @staticmethod
