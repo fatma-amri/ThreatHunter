@@ -1,0 +1,33 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dns
+#open	2026-08-06-21-16-07
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	trans_id	rtt	query	qclass	qclass_name	qtype	qtype_name	rcode	rcode_name	AA	TC	RD	RA	Z	answers	TTLs	rejected
+#types	time	string	addr	port	addr	port	enum	count	interval	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool
+1786050669.271997	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	1.486189	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	0	NOERROR	T	F	F	F	0	192.168.100.1,fe80::bcd0:74ff:fe42:fa66,TXT 0 ,_asquic._udp.local,3c2bd6d1-7226-40cb-9888-993e60829f34._asquic._udp.local,38c1f7c6-421e-46a4-96e1-a83bcf3f9c90.local	4500.000000,4500.000000,4500.000000,4500.000000,4500.000000,4500.000000	F
+1786050669.272172	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	1.486015	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	0	NOERROR	T	F	F	F	0	192.168.100.1,fe80::bcd0:74ff:fe42:fa66,TXT 0 ,_asquic._udp.local,3c2bd6d1-7226-40cb-9888-993e60829f34._asquic._udp.local,38c1f7c6-421e-46a4-96e1-a83bcf3f9c90.local	4500.000000,4500.000000,4500.000000,4500.000000,4500.000000,4500.000000	F
+1786050683.186254	C7pTQ21CyiMZF84rUa	fe80::20c:29ff:fe16:c369	5353	ff02::fb	5353	udp	0	-	_ipps._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050683.186275	CAaFKo2FOqycDI4qbi	192.168.100.30	5353	224.0.0.251	5353	udp	0	-	_ipps._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050671.273864	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050673.275332	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050675.277196	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050677.280599	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050679.282224	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050681.283974	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050683.289056	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050685.284141	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050687.283094	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050689.285022	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050671.274687	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050673.276646	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050675.277943	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050677.282460	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050679.285650	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050681.286405	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050683.289058	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050685.285337	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050687.284028	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+1786050689.286581	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	0	-	_spotify-connect._tcp.local	1	C_INTERNET	12	PTR	-	-	F	F	F	F	0	-	-	F
+#close	2026-08-06-21-16-07

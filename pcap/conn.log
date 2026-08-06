@@ -1,0 +1,16 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	conn
+#open	2026-08-06-21-16-07
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	ip_proto
+#types	time	string	addr	port	addr	port	enum	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	set[string]	count
+1786050683.186254	C7pTQ21CyiMZF84rUa	fe80::20c:29ff:fe16:c369	5353	ff02::fb	5353	udp	dns	-	-	-	S0	T	F	0	D	1	93	0	0	-	17
+1786050683.186275	CAaFKo2FOqycDI4qbi	192.168.100.30	5353	224.0.0.251	5353	udp	dns	-	-	-	S0	T	T	0	D	1	73	0	0	-	17
+1786050669.271997	CqZpQH280zlZIj8B74	192.168.100.1	5353	224.0.0.251	5353	udp	dns	20.013025	763	0	S0	T	T	0	D	12	1099	0	0	-	17
+1786050669.272172	CxVqRzPxCtZ8k6PNh	fe80::bcd0:74ff:fe42:fa66	5353	ff02::fb	5353	udp	dns	20.014409	763	0	S0	T	F	0	D	12	1339	0	0	-	17
+1786050680.412424	CAcHPS36mBaJulR9Nh	fe80::a179:94aa:6f36:945	133	ff02::2	134	icmp	-	-	-	-	OTH	T	F	0	-	1	48	0	0	-	58
+1786050671.197091	CHkZQ72ibtyKCYAlyi	192.168.100.1	55928	239.255.255.250	1900	udp	-	18.020182	1250	0	S0	T	T	0	D	10	1530	0	0	-	17
+1786050669.347096	ChDC6aLngzuTO4V2	192.168.100.1	60953	192.168.100.10	22	tcp	-	21.349935	0	652	OTH	T	T	0	^dA	11	572	11	1224	-	6
+#close	2026-08-06-21-16-07

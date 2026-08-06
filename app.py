@@ -45,19 +45,28 @@ def run_zeek(pcap_path: Path, logs_dir: Path) -> bool:
     Lance Zeek sur un fichier PCAP (ou PCAPng) et genere les logs
     dans logs_dir. Retourne True si l'analyse a reussi.
 
-    Equivalent CLI : cd logs_dir && zeek -r capture.pcap
+    NOTE : Zeek tourne via un wrapper Docker qui monte le DOSSIER COURANT
+    dans le conteneur. On doit donc se placer dans le dossier du PCAP et
+    passer seulement le NOM du fichier (pas un chemin absolu), puis
+    recuperer les logs generes vers logs_dir.
     """
+    pcap_path = pcap_path.resolve()
     if not pcap_path.exists():
         print(f"[!] Fichier introuvable : {pcap_path}")
         return False
 
+    logs_dir = logs_dir.resolve()
     logs_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[Zeek] Analyse de {pcap_path.name} ...")
+    pcap_dir = pcap_path.parent
+    pcap_name = pcap_path.name
+
+    print(f"[Zeek] Analyse de {pcap_name} ...")
 
     try:
+        # cwd = dossier du PCAP -> le wrapper Docker monte ce dossier
         subprocess.run(
-            ["zeek", "-r", str(pcap_path.resolve())],
-            cwd=str(logs_dir),
+            ["zeek", "-C", "-r", pcap_name],
+            cwd=str(pcap_dir),
             check=True,
             capture_output=True,
             text=True,
@@ -69,8 +78,15 @@ def run_zeek(pcap_path: Path, logs_dir: Path) -> bool:
         print(f"[!] Zeek a echoue : {e.stderr}")
         return False
 
-    generated = sorted(p.name for p in logs_dir.glob("*.log"))
-    print(f"[Zeek] Logs generes : {generated}")
+    # Deplacer les .log generes (dans pcap_dir) vers logs_dir
+    import shutil
+    moved = []
+    for log_file in pcap_dir.glob("*.log"):
+        dest = logs_dir / log_file.name
+        shutil.move(str(log_file), str(dest))
+        moved.append(log_file.name)
+
+    print(f"[Zeek] Logs generes : {sorted(moved)}")
     return True
 
 
