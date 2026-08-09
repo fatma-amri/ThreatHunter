@@ -18,6 +18,7 @@ from pathlib import Path
 from core.engine import DetectionEngine
 from database.db import Database
 from config import settings
+from cti.enrichment import Enricher
 
 # ─── Detecteurs disponibles ───────────────────────────────
 # Au fur et a mesure que tu codes les autres detecteurs,
@@ -101,7 +102,19 @@ def run_detection(logs_dir: Path, store: bool) -> list:
     for detector_cls in DETECTORS:
         engine.register(detector_cls())
 
-    alerts = engine.run(store=store)
+    alerts = engine.run(store=False)
+
+    # ─── Enrichissement CTI (MISP) ───────────────────────────
+    # L'enrichissement intervient APRES la detection : la CTI ajoute
+    # du contexte aux alertes deja detectees par comportement.
+    enricher = Enricher()
+    alerts = enricher.enrich_all(alerts)
+
+    # Stockage APRES enrichissement (pour sauvegarder le contexte CTI)
+    if store and alerts:
+        db.insert_many(alerts)
+        print(f"[Engine] {len(alerts)} alerte(s) enregistree(s) en base")
+
     return alerts
 
 
