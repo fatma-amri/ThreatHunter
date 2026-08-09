@@ -31,8 +31,8 @@ THRESHOLDS = {
         "port": 22,             # SSH
     },
     "beaconing": {
-        "max_jitter": 0.10,     # jitter < 10 % = comportement automatisé
-        "min_connections": 10,  # nb minimum de connexions pour conclure
+        "max_jitter": 0.30,     # jitter < 10 % = comportement automatisé
+        "min_connections": 4,  # nb minimum de connexions pour conclure
     },
     "dns_tunnel": {
         "min_entropy": 3.5,     # entropie de Shannon élevée = données encodées
