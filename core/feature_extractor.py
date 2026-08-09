@@ -163,6 +163,26 @@ class FeatureExtractor:
         df[col_ts] = pd.to_numeric(df[col_ts], errors="coerce")
         df = df.dropna(subset=[col_ts])
 
+        # Exclure les destinations qui ne peuvent PAS etre un C2 :
+        #  - broadcast (.255), multicast (224-239.x), diffusion locale
+        # Un serveur C2 est toujours une IP externe routable. Ce filtre
+        # elimine les faux positifs dus au trafic reseau Windows (NetBIOS,
+        # SMB, mDNS...) qui est lui aussi regulier.
+        def _is_c2_candidate(ip: str) -> bool:
+            ip = str(ip)
+            if ip.endswith(".255"):                       # broadcast
+                return False
+            first = ip.split(".")[0]
+            if first.isdigit() and 224 <= int(first) <= 239:  # multicast
+                return False
+            if ip in ("255.255.255.255",):                # broadcast global
+                return False
+            return True
+
+        df = df[df[col_dst].apply(_is_c2_candidate)]
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+
         rows = []
         for (src, dst), g in df.groupby([col_src, col_dst]):
             if len(g) < 3:                      # trop peu de points -> non significatif
