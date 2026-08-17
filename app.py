@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from pathlib import Path
 
 from core.engine import DetectionEngine

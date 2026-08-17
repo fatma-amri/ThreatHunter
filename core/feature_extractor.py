@@ -39,7 +39,7 @@ class FeatureExtractor:
     #  Features PORT SCAN  (source: conn.log)
     # ─────────────────────────────────────────────────────────
     @staticmethod
-    def port_scan_features(conn: pd.DataFrame) -> pd.DataFrame:
+    def port_scan_features(conn: pd.DataFrame, states: Optional[set] = None) -> pd.DataFrame:
         """
         Pour chaque IP source, compte le nombre de ports destination
         DISTINCTS contactes et le nombre d'hotes cibles.
@@ -47,13 +47,20 @@ class FeatureExtractor:
         Un scan de ports se traduit par un tres grand nombre de ports
         distincts vises par une meme source.
 
+        states : ensemble optionnel d'etats conn_state a conserver avant
+                 agregation. Permet de specialiser le detecteur selon la
+                 *technique* de scan :
+                   - {"S0"}  -> SYN scan (half-open, SYN sans handshake)
+                   - {"SF"}  -> TCP Connect scan (connexion complete)
+                 Si None (defaut), tous les etats sont pris en compte :
+                 c'est le comportement d'origine du PortScanDetector.
+
         Retourne un DataFrame :
             src_ip | distinct_ports | distinct_hosts | total_conns
         """
+        cols = ["src_ip", "distinct_ports", "distinct_hosts", "total_conns"]
         if conn is None or conn.empty:
-            return pd.DataFrame(
-                columns=["src_ip", "distinct_ports", "distinct_hosts", "total_conns"]
-            )
+            return pd.DataFrame(columns=cols)
 
         df = conn.copy()
 
@@ -64,9 +71,15 @@ class FeatureExtractor:
         col_port = _first_col(df, ["id.resp_p", "resp_p", "dst_port"])
 
         if not (col_src and col_dst and col_port):
-            return pd.DataFrame(
-                columns=["src_ip", "distinct_ports", "distinct_hosts", "total_conns"]
-            )
+            return pd.DataFrame(columns=cols)
+
+        # Filtre optionnel par etat de connexion (specialise le detecteur).
+        if states:
+            col_state = _first_col(df, ["conn_state", "state"])
+            if col_state:
+                df = df[df[col_state].isin(states)]
+            if df.empty:
+                return pd.DataFrame(columns=cols)
 
         grouped = (
             df.groupby(col_src)
