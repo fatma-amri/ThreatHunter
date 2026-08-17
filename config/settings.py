@@ -43,6 +43,9 @@ THRESHOLDS = {
     "syn_scan": {
         "min_ports": 50
     },
+    "tcp_connect_scan": {
+        "min_ports": 50
+    },
 }
 
 # ─── Niveaux de sévérité ──────────────────────────────────────

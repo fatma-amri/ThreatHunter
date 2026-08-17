@@ -30,6 +30,7 @@ from detectors.port_scan import PortScanDetector
 from detectors.brute_force import BruteForceDetector
 from detectors.beaconing import BeaconingDetector
 from detectors.syn_scan import SynScanDetector
+from detectors.tcp_connect_scan import TcpConnectScanDetector
 # from detectors.dns_tunnel import DNSTunnelDetector
 # from detectors.exfiltration import ExfiltrationDetector
 
@@ -38,6 +39,7 @@ DETECTORS = [
     BruteForceDetector,
     BeaconingDetector,
     SynScanDetector,
+    TcpConnectScanDetector,
     # DNSTunnelDetector,
     # ExfiltrationDetector,
 ]
