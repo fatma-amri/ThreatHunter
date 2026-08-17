@@ -36,7 +36,7 @@ class SynScanDetector(BaseDetector):
 
     # Valeur par defaut si le seuil n'est pas defini dans settings.THRESHOLDS
     DEFAULT_MIN_PORTS = 50
-    SCAN_STATES = {"S0"}   # SYN envoye, pas de handshake complet
+    SCAN_STATES = {"S0", "REJ", "RSTO", "RSTOS0"}   # SYN envoye, pas de handshake complet
 
     def analyze(self, logs: Dict[str, pd.DataFrame]) -> List[Alert]:
         conn = logs.get("conn")
@@ -61,7 +61,7 @@ class SynScanDetector(BaseDetector):
                 src_ip=row["src_ip"],
                 description=(
                     f"SYN scan (half-open) detecte : {int(row['distinct_ports'])} "
-                    f"ports distincts en etat S0 sur {int(row['distinct_hosts'])} "
+                    f"ports distincts non etablis sur {int(row['distinct_hosts'])} "
                     f"hote(s) (seuil : {min_ports})"
                 ),
                 evidence={
