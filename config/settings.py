@@ -49,6 +49,9 @@ THRESHOLDS = {
     "udp_scan": {
         "min_ports": 50
     },
+    "vertical_scan": {
+        "min_ports": 50
+    },
 }
 
 # ─── Niveaux de sévérité ──────────────────────────────────────

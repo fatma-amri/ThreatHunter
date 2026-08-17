@@ -135,6 +135,40 @@ class FeatureExtractor:
         )
         return grouped.sort_values("distinct_ports", ascending=False)
     # ─────────────────────────────────────────────────────────
+    #  Features VERTICAL SCAN  (source: conn.log)
+    # ─────────────────────────────────────────────────────────
+    @staticmethod
+    def vertical_scan_features(conn: pd.DataFrame) -> pd.DataFrame:
+        """
+        Pour chaque PAIRE (src, dst), compte le nombre de ports destination
+        DISTINCTS. Un vertical scan = une source qui sonde de tres nombreux
+        ports sur UNE MEME cible (contrairement au port scan global, agrege
+        toutes destinations confondues).
+
+        Retourne :
+            src_ip | dst_ip | distinct_ports | total_conns
+        """
+        cols = ["src_ip", "dst_ip", "distinct_ports", "total_conns"]
+        if conn is None or conn.empty:
+            return pd.DataFrame(columns=cols)
+
+        df = conn.copy()
+        col_src  = _first_col(df, ["id.orig_h", "orig_h", "src_ip"])
+        col_dst  = _first_col(df, ["id.resp_h", "resp_h", "dst_ip"])
+        col_port = _first_col(df, ["id.resp_p", "resp_p", "dst_port"])
+
+        if not (col_src and col_dst and col_port):
+            return pd.DataFrame(columns=cols)
+
+        grouped = (
+            df.groupby([col_src, col_dst])
+              .agg(distinct_ports=(col_port, "nunique"),
+                   total_conns=(col_port, "size"))
+              .reset_index()
+              .rename(columns={col_src: "src_ip", col_dst: "dst_ip"})
+        )
+        return grouped.sort_values("distinct_ports", ascending=False)
+    # ─────────────────────────────────────────────────────────
     #  Features SSH BRUTE FORCE  (source: conn.log)
     # ─────────────────────────────────────────────────────────
     @staticmethod

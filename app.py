@@ -32,6 +32,7 @@ from detectors.beaconing import BeaconingDetector
 from detectors.syn_scan import SynScanDetector
 from detectors.tcp_connect_scan import TcpConnectScanDetector
 from detectors.udp_scan import UdpScanDetector
+from detectors.vertical_scan import VerticalScanDetector
 # from detectors.dns_tunnel import DNSTunnelDetector
 # from detectors.exfiltration import ExfiltrationDetector
 
@@ -42,6 +43,7 @@ DETECTORS = [
     SynScanDetector,
     TcpConnectScanDetector,
     UdpScanDetector,
+    VerticalScanDetector,
     # DNSTunnelDetector,
     # ExfiltrationDetector,
 ]
