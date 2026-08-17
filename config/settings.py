@@ -52,6 +52,14 @@ THRESHOLDS = {
     "vertical_scan": {
         "min_ports": 50
     },
+    "horizontal_scan": {
+        "min_hosts": 20
+    },
+    "slow_scan": {
+        "min_ports": 20,
+        "min_interval": 30, 
+        "min_duration": 600
+    },
 }
 
 # ─── Niveaux de sévérité ──────────────────────────────────────

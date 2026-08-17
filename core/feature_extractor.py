@@ -169,6 +169,91 @@ class FeatureExtractor:
         )
         return grouped.sort_values("distinct_ports", ascending=False)
     # ─────────────────────────────────────────────────────────
+    #  Features HORIZONTAL SCAN  (source: conn.log)
+    # ─────────────────────────────────────────────────────────
+    @staticmethod
+    def horizontal_scan_features(conn: pd.DataFrame) -> pd.DataFrame:
+        """
+        Pour chaque PAIRE (src, port), compte le nombre d'HOTES destination
+        DISTINCTS. Un horizontal scan = une source qui teste UN MEME port
+        sur de tres nombreux hotes (ex: qui a le 445 ouvert ?).
+
+        Retourne :
+            src_ip | dst_port | distinct_hosts | total_conns
+        """
+        cols = ["src_ip", "dst_port", "distinct_hosts", "total_conns"]
+        if conn is None or conn.empty:
+            return pd.DataFrame(columns=cols)
+
+        df = conn.copy()
+        col_src  = _first_col(df, ["id.orig_h", "orig_h", "src_ip"])
+        col_dst  = _first_col(df, ["id.resp_h", "resp_h", "dst_ip"])
+        col_port = _first_col(df, ["id.resp_p", "resp_p", "dst_port"])
+
+        if not (col_src and col_dst and col_port):
+            return pd.DataFrame(columns=cols)
+
+        grouped = (
+            df.groupby([col_src, col_port])
+              .agg(distinct_hosts=(col_dst, "nunique"),
+                   total_conns=(col_dst, "size"))
+              .reset_index()
+              .rename(columns={col_src: "src_ip", col_port: "dst_port"})
+        )
+        return grouped.sort_values("distinct_hosts", ascending=False)
+    # ─────────────────────────────────────────────────────────
+    #  Features SLOW SCAN  (source: conn.log)
+    # ─────────────────────────────────────────────────────────
+    @staticmethod
+    def slow_scan_features(conn: pd.DataFrame) -> pd.DataFrame:
+        """
+        Pour chaque PAIRE (src, dst), calcule le nombre de ports distincts,
+        la DUREE totale du balayage et l'INTERVALLE MOYEN entre connexions.
+
+        Un slow scan etale ses sondes dans le temps pour rester sous les
+        seuils classiques : nombre de ports significatif MAIS intervalle
+        moyen eleve et duree totale longue (contrairement a un scan rapide
+        qui envoie tout en quelques secondes).
+
+        Retourne :
+            src_ip | dst_ip | distinct_ports | duration | mean_interval
+        """
+        cols = ["src_ip", "dst_ip", "distinct_ports", "duration", "mean_interval"]
+        if conn is None or conn.empty:
+            return pd.DataFrame(columns=cols)
+
+        df = conn.copy()
+        col_src  = _first_col(df, ["id.orig_h", "orig_h", "src_ip"])
+        col_dst  = _first_col(df, ["id.resp_h", "resp_h", "dst_ip"])
+        col_port = _first_col(df, ["id.resp_p", "resp_p", "dst_port"])
+        col_ts   = _first_col(df, ["ts", "timestamp"])
+
+        if not (col_src and col_dst and col_port and col_ts):
+            return pd.DataFrame(columns=cols)
+
+        df[col_ts] = pd.to_numeric(df[col_ts], errors="coerce")
+        df = df.dropna(subset=[col_ts])
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+
+        rows = []
+        for (src, dst), g in df.groupby([col_src, col_dst]):
+            n_ports = int(g[col_port].nunique())
+            if n_ports < 2:
+                continue                       # pas un balayage
+            times = g[col_ts].sort_values().to_numpy()
+            duration = float(times[-1] - times[0])
+            # intervalle moyen entre 2 connexions successives
+            mean_interval = duration / (len(times) - 1) if len(times) > 1 else 0.0
+            rows.append({
+                "src_ip": src, "dst_ip": dst,
+                "distinct_ports": n_ports,
+                "duration": round(duration, 2),
+                "mean_interval": round(mean_interval, 2),
+            })
+
+        return pd.DataFrame(rows, columns=cols).sort_values("mean_interval", ascending=False)
+    # ─────────────────────────────────────────────────────────
     #  Features SSH BRUTE FORCE  (source: conn.log)
     # ─────────────────────────────────────────────────────────
     @staticmethod
