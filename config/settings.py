@@ -46,6 +46,9 @@ THRESHOLDS = {
     "tcp_connect_scan": {
         "min_ports": 50
     },
+    "udp_scan": {
+        "min_ports": 50
+    },
 }
 
 # ─── Niveaux de sévérité ──────────────────────────────────────

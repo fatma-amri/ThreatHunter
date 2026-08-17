@@ -92,7 +92,48 @@ class FeatureExtractor:
               .rename(columns={col_src: "src_ip"})
         )
         return grouped.sort_values("distinct_ports", ascending=False)
+    # ─────────────────────────────────────────────────────────
+    #  Features UDP SCAN  (source: conn.log)
+    # ─────────────────────────────────────────────────────────
+    @staticmethod
+    def udp_scan_features(conn: pd.DataFrame) -> pd.DataFrame:
+        """
+        Pour chaque IP source, compte le nombre de ports destination UDP
+        DISTINCTS contactes. Un UDP scan (nmap -sU) sonde de nombreux ports
+        UDP : on filtre donc sur le protocole (proto == udp) avant d'agreger.
 
+        Retourne un DataFrame :
+            src_ip | distinct_ports | distinct_hosts | total_conns
+        """
+        cols = ["src_ip", "distinct_ports", "distinct_hosts", "total_conns"]
+        if conn is None or conn.empty:
+            return pd.DataFrame(columns=cols)
+
+        df = conn.copy()
+        col_src   = _first_col(df, ["id.orig_h", "orig_h", "src_ip"])
+        col_dst   = _first_col(df, ["id.resp_h", "resp_h", "dst_ip"])
+        col_port  = _first_col(df, ["id.resp_p", "resp_p", "dst_port"])
+        col_proto = _first_col(df, ["proto", "protocol"])
+
+        if not (col_src and col_dst and col_port and col_proto):
+            return pd.DataFrame(columns=cols)
+
+        # Ne garder que le trafic UDP (insensible a la casse)
+        df = df[df[col_proto].astype(str).str.lower() == "udp"]
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+
+        grouped = (
+            df.groupby(col_src)
+              .agg(
+                  distinct_ports=(col_port, "nunique"),
+                  distinct_hosts=(col_dst,  "nunique"),
+                  total_conns=(col_port,    "size"),
+              )
+              .reset_index()
+              .rename(columns={col_src: "src_ip"})
+        )
+        return grouped.sort_values("distinct_ports", ascending=False)
     # ─────────────────────────────────────────────────────────
     #  Features SSH BRUTE FORCE  (source: conn.log)
     # ─────────────────────────────────────────────────────────
