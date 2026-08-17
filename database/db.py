@@ -1,92 +1,86 @@
-
-import sqlite3
-import json
-from pathlib import Path
+import os
 from typing import List, Optional
-
+from pymongo import MongoClient, DESCENDING, ASCENDING
+from pymongo.errors import PyMongoError
 from config import settings
 from core.alerts import Alert
 
 
 class Database:
-    """Interface SQLite pour les alertes."""
+    """Interface MongoDB pour les alertes."""
 
-    def __init__(self, db_path: Path = None):
-        self.db_path = Path(db_path or settings.DB_PATH)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._create_tables()
+    def __init__(self, uri: str = None, dbname: str = None):
+        self.uri = uri or settings.MONGO_URI
+        self.dbname = dbname or settings.DB_NAME
+        # timeout court => mode dégradé rapide si la base est injoignable
+        self.client = MongoClient(self.uri, serverSelectionTimeoutMS=3000)
+        self.db = self.client[self.dbname]
+        self.alerts = self.db["alerts"]
+        self._ensure_indexes()
 
-    def _connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row   # accès aux colonnes par nom
-        return conn
+    def _ensure_indexes(self):
+        """Index créés une seule fois (idempotent)."""
+        self.alerts.create_index([("timestamp", DESCENDING)])
+        self.alerts.create_index([("severity", ASCENDING)])
+        self.alerts.create_index([("src_ip", ASCENDING)])
+        self.alerts.create_index([("detector", ASCENDING)])
 
-    def _create_tables(self):
-        """Cree la table alerts si elle n'existe pas."""
-        with self._connect() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS alerts (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp   TEXT    NOT NULL,
-                    detector    TEXT    NOT NULL,
-                    severity    TEXT    NOT NULL,
-                    src_ip      TEXT    NOT NULL,
-                    dst_ip      TEXT,
-                    description TEXT    NOT NULL,
-                    mitre       TEXT,
-                    evidence    TEXT,
-                    cti_context TEXT
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON alerts(timestamp)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_sev ON alerts(severity)")
+    @staticmethod
+    def _to_doc(alert: Alert) -> dict:
+        """Alert -> document Mongo. evidence/cti_context restent des dicts natifs."""
+        return {
+            "timestamp":   alert.timestamp,
+            "detector":    alert.detector,
+            "severity":    alert.severity,
+            "src_ip":      alert.src_ip,
+            "dst_ip":      alert.dst_ip,
+            "description": alert.description,
+            "mitre":       alert.mitre,
+            "evidence":    alert.evidence or {},
+            "cti_context": alert.cti_context or {},
+        }
 
-    def insert_alert(self, alert: Alert) -> int:
-        """Insere une alerte, renvoie son id."""
-        with self._connect() as conn:
-            cur = conn.execute("""
-                INSERT INTO alerts
-                (timestamp, detector, severity, src_ip, dst_ip,
-                 description, mitre, evidence, cti_context)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                alert.timestamp, alert.detector, alert.severity,
-                alert.src_ip, alert.dst_ip, alert.description, alert.mitre,
-                json.dumps(alert.evidence),      # dict -> texte JSON
-                json.dumps(alert.cti_context),
-            ))
-            return cur.lastrowid
+    def insert_alert(self, alert: Alert):
+        """Insère une alerte, renvoie son _id (ou None si base injoignable)."""
+        try:
+            return self.alerts.insert_one(self._to_doc(alert)).inserted_id
+        except PyMongoError as e:
+            print(f"[db] MongoDB indisponible, alerte non persistée : {e}")
+            return None
 
     def insert_many(self, alerts: List[Alert]) -> int:
-        """Insere plusieurs alertes, renvoie le nombre insere."""
-        return sum(1 for a in alerts if self.insert_alert(a))
+        """Insère plusieurs alertes en une passe, renvoie le nombre inséré."""
+        docs = [self._to_doc(a) for a in alerts]
+        if not docs:
+            return 0
+        try:
+            return len(self.alerts.insert_many(docs, ordered=False).inserted_ids)
+        except PyMongoError as e:
+            print(f"[db] MongoDB indisponible, alertes non persistées : {e}")
+            return 0
 
     def get_alerts(self, limit: int = 50, severity: Optional[str] = None) -> List[dict]:
-        """Recupere les alertes les plus recentes."""
-        query = "SELECT * FROM alerts"
-        params = []
-        if severity:
-            query += " WHERE severity = ?"
-            params.append(severity)
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-
-        with self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
-
+        """Alertes les plus récentes. Format de sortie identique à l'ancienne version."""
+        query = {"severity": severity} if severity else {}
+        try:
+            cursor = self.alerts.find(query).sort("timestamp", DESCENDING).limit(limit)
+        except PyMongoError as e:
+            print(f"[db] MongoDB indisponible : {e}")
+            return []
         result = []
-        for r in rows:
-            d = dict(r)
-            d["evidence"] = json.loads(d["evidence"] or "{}")
-            d["cti_context"] = json.loads(d["cti_context"] or "{}")
-            result.append(d)
+        for doc in cursor:
+            doc["id"] = str(doc.pop("_id"))   # _id (ObjectId) -> id (str)
+            doc.setdefault("evidence", {})
+            doc.setdefault("cti_context", {})
+            result.append(doc)
         return result
 
     def count(self) -> int:
-        with self._connect() as conn:
-            return conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        try:
+            return self.alerts.count_documents({})
+        except PyMongoError:
+            return 0
 
     def clear(self):
-        """Vide la table (utile pour les tests)."""
-        with self._connect() as conn:
-            conn.execute("DELETE FROM alerts")
+        """Vide la collection (utile pour les tests)."""
+        self.alerts.delete_many({})

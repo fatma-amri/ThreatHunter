@@ -11,8 +11,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent   # racine ThreatHunter/
 load_dotenv(BASE_DIR / ".env")
 PCAP_DIR = BASE_DIR / "pcap"                        # captures réseau
 LOGS_DIR = BASE_DIR / "logs"                        # logs générés par Zeek
-DB_PATH  = BASE_DIR / "database" / "alerts.db"      # base SQLite
-
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")  # voir .env
+DB_NAME   = os.getenv("DB_NAME", "threathunter")
 # ─── Connexion MISP ───────────────────────────────────────────
 MISP_URL    = os.getenv("MISP_URL", "https://192.168.100.20")
 MISP_KEY    = os.getenv("MISP_KEY", "")   # jamais en dur : voir .env
