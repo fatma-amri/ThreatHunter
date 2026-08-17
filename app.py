@@ -22,12 +22,14 @@ from database.db import Database
 from config import settings
 from cti.enrichment import Enricher
 
+
 # ─── Detecteurs disponibles ───────────────────────────────
 # Au fur et a mesure que tu codes les autres detecteurs,
 # il suffit de les importer et de les ajouter a cette liste.
 from detectors.port_scan import PortScanDetector
 from detectors.brute_force import BruteForceDetector
 from detectors.beaconing import BeaconingDetector
+from detectors.syn_scan import SynScanDetector
 # from detectors.dns_tunnel import DNSTunnelDetector
 # from detectors.exfiltration import ExfiltrationDetector
 
@@ -35,6 +37,7 @@ DETECTORS = [
     PortScanDetector,
     BruteForceDetector,
     BeaconingDetector,
+    SynScanDetector,
     # DNSTunnelDetector,
     # ExfiltrationDetector,
 ]

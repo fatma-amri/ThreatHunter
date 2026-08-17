@@ -40,6 +40,9 @@ THRESHOLDS = {
     "exfiltration": {
         "max_bytes": 1_000_000, # > 1 Mo sortant par session
     },
+    "syn_scan": {
+        "min_ports": 50
+    },
 }
 
 # ─── Niveaux de sévérité ──────────────────────────────────────
