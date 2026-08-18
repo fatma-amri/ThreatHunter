@@ -1,13 +1,13 @@
 """
 Detecteur de Brute Force SSH.
 
-Principe : une IP source qui enchaine un grand nombre de tentatives de
-connexion ECHOUEES sur le port SSH (22) mene vraisemblablement une attaque
-par force brute (essais de mots de passe).
+Une IP source qui enchaine de nombreuses tentatives de connexion
+ECHOUEES sur le port SSH (22) mene vraisemblablement une attaque par
+force brute (essais de mots de passe).
 
 MITRE ATT&CK : T1110 - Brute Force
 Log utilise  : conn.log
-Feature       : failed_attempts (echecs de connexion sur le port 22)
+Feature       : failed_attempts (echecs sur le port 22)
 """
 from typing import List, Dict
 import pandas as pd
@@ -20,12 +20,15 @@ from core.feature_extractor import FeatureExtractor
 class BruteForceDetector(BaseDetector):
     """Detecte une attaque brute force SSH a partir de conn.log."""
 
+    ENGINE_ID = "ENG-008"
     NAME = "BruteForceDetector"
+    FAMILY = "Brute Force"
     SEVERITY = "HIGH"
     MITRE = "T1110"
+    LOG = "conn.log"
+    FEATURE = "failed_attempts"
     THRESHOLD_KEY = "brute_force"
 
-    # Valeurs par defaut si absentes de settings.THRESHOLDS
     DEFAULT_MIN_ATTEMPTS = 10
     DEFAULT_PORT = 22
 
@@ -34,19 +37,15 @@ class BruteForceDetector(BaseDetector):
         if conn is None or conn.empty:
             return []
 
-        # 1. Seuils depuis settings, sinon valeurs par defaut
         min_attempts = self.thresholds.get("min_attempts", self.DEFAULT_MIN_ATTEMPTS)
         port = self.thresholds.get("port", self.DEFAULT_PORT)
 
-        # 2. Extraction des features comportementales
         features = FeatureExtractor.brute_force_features(conn, port=port)
         if features.empty:
             return []
 
-        # 3. Sources depassant le seuil d'echecs
         suspects = features[features["failed_attempts"] >= min_attempts]
 
-        # 4. Une alerte par source suspecte
         alerts: List[Alert] = []
         for _, row in suspects.iterrows():
             dst = row.get("dst_ip")

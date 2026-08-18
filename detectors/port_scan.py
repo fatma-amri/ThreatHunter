@@ -1,13 +1,14 @@
 """
-Detecteur de Port Scan.
+Detecteur de Port Scan (generique).
 
-Principe : une IP source qui contacte un nombre anormalement eleve de ports
-destination DISTINCTS en peu de temps effectue vraisemblablement un balayage
-de ports (reconnaissance).
+Une IP source qui contacte un nombre anormalement eleve de ports
+destination DISTINCTS (toutes cibles confondues) effectue un balayage.
+C'est le detecteur GENERIQUE de reconnaissance ; les variantes SYN,
+TCP Connect, UDP, Vertical, Horizontal, Slow, Stealth le specialisent.
 
 MITRE ATT&CK : T1046 - Network Service Discovery
 Log utilise  : conn.log
-Feature       : distinct_ports (nombre de ports distincts par source)
+Feature       : distinct_ports (par source)
 """
 from typing import List, Dict
 import pandas as pd
@@ -20,12 +21,15 @@ from core.feature_extractor import FeatureExtractor
 class PortScanDetector(BaseDetector):
     """Detecte un balayage de ports a partir de conn.log."""
 
+    ENGINE_ID = "ENG-000"
     NAME = "PortScanDetector"
+    FAMILY = "Reconnaissance"
     SEVERITY = "MEDIUM"
     MITRE = "T1046"
+    LOG = "conn.log"
+    FEATURE = "distinct_ports"
     THRESHOLD_KEY = "port_scan"
 
-    # Valeur par defaut si le seuil n'est pas defini dans settings.THRESHOLDS
     DEFAULT_MIN_PORTS = 50
 
     def analyze(self, logs: Dict[str, pd.DataFrame]) -> List[Alert]:
@@ -33,18 +37,13 @@ class PortScanDetector(BaseDetector):
         if conn is None or conn.empty:
             return []
 
-        # 1. Extraction des features comportementales
         features = FeatureExtractor.port_scan_features(conn)
         if features.empty:
             return []
 
-        # 2. Seuil : recupere depuis settings, sinon valeur par defaut
         min_ports = self.thresholds.get("min_ports", self.DEFAULT_MIN_PORTS)
-
-        # 3. On garde les sources qui depassent le seuil
         suspects = features[features["distinct_ports"] >= min_ports]
 
-        # 4. Une alerte par source suspecte
         alerts: List[Alert] = []
         for _, row in suspects.iterrows():
             alerts.append(self.make_alert(
