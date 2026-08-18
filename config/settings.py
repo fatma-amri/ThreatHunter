@@ -3,6 +3,8 @@ Configuration centralisée de la plateforme ThreatHunter.
 Toutes les valeurs paramétrables du projet sont ici.
 """
 import os
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from pathlib import Path
 from dotenv import load_dotenv
 

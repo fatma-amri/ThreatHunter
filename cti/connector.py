@@ -4,8 +4,8 @@ Connecteur vers la plateforme MISP (Cyber Threat Intelligence).
 Ce module interroge MISP via PyMISP pour rechercher un indicateur
 (IP, domaine, hash) et renvoyer le contexte de menace associe.
 
-La couche CTI est concue pour etre modulaire : MISP est le connecteur
-implemente. Un connecteur OpenCTI pourra suivre la meme interface.
+La couche CTI est concue pour etre modulaire : MISP et OpenCTI
+implementent la meme interface BaseCTI.
 
 Securite (RNF-09) : l'URL et la cle API sont lues depuis le fichier .env,
 jamais ecrites en dur dans le code.
@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+from cti.base_cti import BaseCTI
+
 try:
     from pymisp import PyMISP
     PYMISP_AVAILABLE = True
@@ -21,8 +23,10 @@ except ImportError:
     PYMISP_AVAILABLE = False
 
 
-class MISPConnector:
+class MISPConnector(BaseCTI):
     """Interroge MISP pour enrichir les indicateurs des alertes."""
+
+    SOURCE = "MISP"
 
     def __init__(self, url: Optional[str] = None, key: Optional[str] = None,
                  verify_ssl: bool = False):
@@ -51,7 +55,6 @@ class MISPConnector:
     def lookup(self, value: str) -> Optional[dict]:
         """
         Recherche un indicateur (IP, domaine, hash) dans MISP.
-
         Retourne un dictionnaire de contexte si l'indicateur est connu,
         sinon None. Le contexte contient : la source, l'evenement associe,
         les tags (categories de menace) et le niveau de confiance.
