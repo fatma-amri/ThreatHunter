@@ -35,7 +35,8 @@ from detectors.udp_scan import UdpScanDetector
 from detectors.vertical_scan import VerticalScanDetector
 from detectors.horizontal_scan import HorizontalScanDetector
 from detectors.slow_scan import SlowScanDetector
-# from detectors.dns_tunnel import DNSTunnelDetector
+from detectors.stealth_scan import StealthScanDetector
+from detectors.dns_tunnel import DNSTunnelDetector
 # from detectors.exfiltration import ExfiltrationDetector
 
 DETECTORS = [
@@ -48,7 +49,8 @@ DETECTORS = [
     VerticalScanDetector,
     HorizontalScanDetector,
     SlowScanDetector,
-    # DNSTunnelDetector,
+    StealthScanDetector,
+    DNSTunnelDetector,
     # ExfiltrationDetector,
 ]
 

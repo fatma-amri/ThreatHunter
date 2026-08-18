@@ -35,8 +35,11 @@ THRESHOLDS = {
         "min_connections": 4,  # nb minimum de connexions pour conclure
     },
     "dns_tunnel": {
-        "min_entropy": 3.5,     # entropie de Shannon élevée = données encodées
+        "min_entropy": 3.5, 
+        "min_qlen": 40, 
+        "min_queries": 5
     },
+    
     "exfiltration": {
         "max_bytes": 1_000_000, # > 1 Mo sortant par session
     },
@@ -59,6 +62,9 @@ THRESHOLDS = {
         "min_ports": 20,
         "min_interval": 30, 
         "min_duration": 600
+    },
+    "stealth_scan": {
+        "min_ports": 20
     },
 }
 
