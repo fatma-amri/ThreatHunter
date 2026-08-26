@@ -68,6 +68,16 @@ THRESHOLDS = {
     "stealth_scan": {
         "min_ports": 20
     },
+    
+    "correlation": {
+        "window_seconds": 300
+    },
+    "qualification": {
+        "severity_base": {"LOW": 20, "MEDIUM": 45, "HIGH": 70, "CRITICAL": 90},
+        "cti_bonus": 15,
+        "correlation_bonus": 5,
+        "max_correlation_bonus": 20,
+    },
 }
 
 # ─── Niveaux de sévérité ──────────────────────────────────────

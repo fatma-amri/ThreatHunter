@@ -21,7 +21,8 @@ from core.engine import DetectionEngine
 from database.db import Database
 from config import settings
 from cti.enrichment import Enricher
-
+from correlation.correlator import Correlator
+from qualification.qualifier import Qualifier
 
 # ─── Detecteurs disponibles ───────────────────────────────
 # Au fur et a mesure que tu codes les autres detecteurs,
@@ -37,7 +38,7 @@ from detectors.horizontal_scan import HorizontalScanDetector
 from detectors.slow_scan import SlowScanDetector
 from detectors.stealth_scan import StealthScanDetector
 from detectors.dns_tunnel import DNSTunnelDetector
-# from detectors.exfiltration import ExfiltrationDetector
+from detectors.exfiltration import ExfiltrationDetector
 
 DETECTORS = [
     PortScanDetector,
@@ -51,7 +52,7 @@ DETECTORS = [
     SlowScanDetector,
     StealthScanDetector,
     DNSTunnelDetector,
-    # ExfiltrationDetector,
+    ExfiltrationDetector,
 ]
 
 
@@ -126,6 +127,8 @@ def run_detection(logs_dir: Path, store: bool) -> list:
     # du contexte aux alertes deja detectees par comportement.
     enricher = Enricher()
     alerts = enricher.enrich_all(alerts)
+    alerts = Correlator().correlate(alerts)
+    alerts = Qualifier().qualify_all(alerts)
 
     # Stockage APRES enrichissement (pour sauvegarder le contexte CTI)
     if store and alerts:
