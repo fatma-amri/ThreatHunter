@@ -1,3 +1,10 @@
+"""
+Interface MongoDB pour les alertes de la plateforme ThreatHunter.
+
+Collection : alerts
+Mode dégradé : si MongoDB est injoignable, le pipeline continue (retours
+vides / None) au lieu de planter.
+"""
 import os
 from typing import List, Optional
 from pymongo import MongoClient, DESCENDING, ASCENDING
@@ -24,20 +31,27 @@ class Database:
         self.alerts.create_index([("severity", ASCENDING)])
         self.alerts.create_index([("src_ip", ASCENDING)])
         self.alerts.create_index([("detector", ASCENDING)])
+        self.alerts.create_index([("risk_score", DESCENDING)])
 
     @staticmethod
     def _to_doc(alert: Alert) -> dict:
         """Alert -> document Mongo. evidence/cti_context restent des dicts natifs."""
         return {
-            "timestamp":   alert.timestamp,
-            "detector":    alert.detector,
-            "severity":    alert.severity,
-            "src_ip":      alert.src_ip,
-            "dst_ip":      alert.dst_ip,
-            "description": alert.description,
-            "mitre":       alert.mitre,
-            "evidence":    alert.evidence or {},
-            "cti_context": alert.cti_context or {},
+            "timestamp":         alert.timestamp,
+            "detector":          alert.detector,
+            "severity":          alert.severity,
+            "src_ip":            alert.src_ip,
+            "dst_ip":            alert.dst_ip,
+            "description":       alert.description,
+            "mitre":             alert.mitre,
+            "evidence":          alert.evidence or {},
+            "cti_context":       alert.cti_context or {},
+            # ─── Champs Qualification (couche 7) ───────────────
+            "risk_score":        alert.risk_score,
+            "confidence":        alert.confidence,
+            # ─── Champs Corrélation (couche 6) ─────────────────
+            "correlated_count":  alert.correlated_count,
+            "related_detectors": alert.related_detectors or [],
         }
 
     def insert_alert(self, alert: Alert):
@@ -60,7 +74,7 @@ class Database:
             return 0
 
     def get_alerts(self, limit: int = 50, severity: Optional[str] = None) -> List[dict]:
-        """Alertes les plus récentes. Format de sortie identique à l'ancienne version."""
+        """Alertes les plus récentes. Format de sortie stable pour le dashboard."""
         query = {"severity": severity} if severity else {}
         try:
             cursor = self.alerts.find(query).sort("timestamp", DESCENDING).limit(limit)
@@ -72,6 +86,11 @@ class Database:
             doc["id"] = str(doc.pop("_id"))   # _id (ObjectId) -> id (str)
             doc.setdefault("evidence", {})
             doc.setdefault("cti_context", {})
+            # Valeurs par défaut pour les documents antérieurs (pré-qualification)
+            doc.setdefault("risk_score", None)
+            doc.setdefault("confidence", None)
+            doc.setdefault("correlated_count", 1)
+            doc.setdefault("related_detectors", [])
             result.append(doc)
         return result
 
