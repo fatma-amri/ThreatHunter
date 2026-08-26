@@ -12,7 +12,8 @@ Lancement :
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pandas as pd
 import plotly.express as px
@@ -21,11 +22,13 @@ import streamlit as st
 
 from database.db import Database
 from config import settings
-from dashboard import data
+import dashboard_data as data
 
 st.set_page_config(page_title="ThreatHunter SOC", page_icon="🛡️", layout="wide")
 MAX_ALERTS = 2000
-
+from dashboard.pages.theme import inject_theme, app_header
+inject_theme()
+app_header("ThreatHunter", "Plateforme de Threat Hunting réseau", "SOC · Keystone Group")
 # ─── Style (touches creatives, CSS leger) ──────────────────────
 st.markdown("""
 <style>
