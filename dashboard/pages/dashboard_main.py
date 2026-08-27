@@ -11,6 +11,7 @@ Lancement :
     # acces depuis le Mac : http://192.168.100.10:8501
 """
 import base64
+import re as _re
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -28,9 +29,9 @@ import dashboard_data as data
 st.set_page_config(page_title="ThreatHunter SOC", page_icon="🛡️", layout="wide")
 MAX_ALERTS = 2000
 from dashboard.pages.theme import (
-    inject_theme, app_header, section_header, kpi_card, kpi_strip, severity_badge,
-    critical_stamp, mono_chip, code_well, perforated_divider, plotly_layout,
-    empty_state, status_row, threat_level_banner, ranked_list,
+    inject_theme, section_header, kpi_card, kpi_strip, severity_badge,
+    critical_stamp, mono_chip, code_well, report_block, perforated_divider,
+    plotly_layout, empty_state, status_row, threat_level_banner, ranked_list,
     TOKENS,
 )
 
@@ -49,8 +50,10 @@ def _load_logo_data_uri() -> str | None:
 LOGO_URI = _load_logo_data_uri()
 
 inject_theme()
-app_header("ThreatHunter", "Threat Hunting & Network Detection Platform",
-           "SOC · Keystone Group", logo_data_uri=LOGO_URI)
+# NB : pas d'app_header() ici — la marque (logo + "ThreatHunter" + "SOC ·
+# Keystone Group") vit UNIQUEMENT dans la sidebar (sidebar_filters()). La
+# repeter en tete de CHAQUE page dupliquerait le branding et mangerait de
+# l'espace vertical ; chaque page a deja son propre section_header().
 
 
 @st.cache_data(ttl=30)
@@ -107,6 +110,49 @@ def _top_list(df: pd.DataFrame, col: str, n: int = 6) -> list[tuple[str, int]]:
     return list(zip(tc[col].astype(str), tc["count"].astype(int)))
 
 
+def _top_talkers(df: pd.DataFrame, n: int = 8) -> list[tuple[str, int]]:
+    """IP les plus actives, source OU destination confondues (distinct de
+    'top sources' / 'top destinations' pris separement)."""
+    if df.empty:
+        return []
+    combined = pd.concat([df["src_ip"], df["dst_ip"]]).dropna().astype(str)
+    vc = combined[combined != "None"].value_counts().head(n)
+    if vc.empty:
+        return []
+    return list(zip(vc.index, vc.values.astype(int)))
+
+
+_IP_RE = _re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
+_HASH_RE = _re.compile(r"^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$")
+_DOMAIN_RE = _re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9-]+)+$")
+
+
+def classify_indicator(term: str) -> str:
+    """Classe la FORME de l'indicateur recherche (pas les donnees des
+    resultats) : IP / HASH / DOMAIN / FREE-TEXT. Sert a orienter l'analyste,
+    pas a fabriquer des categories de donnees qui n'existent pas dans le
+    modele Alert (qui ne porte que des IP, pas de domaine/hash dedies)."""
+    t = (term or "").strip()
+    if _IP_RE.match(t):
+        return "IP"
+    if _HASH_RE.match(t):
+        return "HASH"
+    if _DOMAIN_RE.match(t) and not _IP_RE.match(t):
+        return "DOMAIN"
+    return "FREE-TEXT"
+
+
+def _mask_uri(uri: str) -> str:
+    """Masque les identifiants (user:pass@) embarques dans une URI de connexion.
+    'mongodb://thunter:S3cr3t@host:27017/db' -> 'mongodb://***:***@host:27017/db'.
+    Greedy jusqu'au DERNIER '@' : un mot de passe peut lui-meme contenir un
+    '@' non encode (ex: le mot de passe par defaut du docker-compose de ce
+    projet) — un `[^@]+` naif s'arreterait au premier '@' et laisserait une
+    partie du secret en clair apres celui-ci. Ne jamais afficher un secret
+    en clair dans l'UI, meme en lecture seule."""
+    return _re.sub(r"//.*@", "//***:***@", uri or "")
+
+
 def threat_flow_map(df: pd.DataFrame):
     """'Live Threat Map' honnete vu nos donnees (pas de geoloc reelle sur des
     IP privees de lab) : diagramme de flux source -> destination, colore par
@@ -141,12 +187,31 @@ def threat_flow_map(df: pd.DataFrame):
 
 def threat_level(k: dict) -> tuple[str, str]:
     if k["critical"] > 0:
-        return "CRITICAL", f"{k['critical']} alerte(s) critique(s) active(s)"
+        return "CRITICAL", f"{k['critical']} active critical alert(s)"
     if k["high"] > 0:
-        return "ELEVATED", f"{k['high']} alerte(s) elevee(s)"
+        return "ELEVATED", f"{k['high']} high-risk alert(s)"
     if k["total"] > 0:
-        return "NOMINAL", "aucune alerte critique ou elevee"
-    return "NOMINAL", "aucune donnee pour ces filtres"
+        return "NOMINAL", "no critical or high-risk alerts"
+    return "NOMINAL", "no data for current filters"
+
+
+def _executive_summary(df: pd.DataFrame, k: dict, level: str) -> str:
+    """Paragraphe narratif genere a partir des KPI reels de la selection —
+    aucune donnee inventee, uniquement une mise en phrase de compute_kpis()."""
+    if df.empty:
+        return "No alerts were recorded for the current selection — nothing to report."
+    top_mitre = _top_list(df, "mitre", 1)
+    technique = f" The most frequently observed technique was {top_mitre[0][0]} ({top_mitre[0][1]} alert(s))." \
+        if top_mitre else ""
+    cti_txt = f" {k['cti_hits']} alert(s) were confirmed against threat intelligence." if k["cti_hits"] else ""
+    corr_txt = f" {k['correlated']} incident(s) correlate activity across multiple detectors." \
+        if k["correlated"] else ""
+    return (
+        f"During the selected period, {k['total']} alert(s) were recorded across "
+        f"{k['distinct_sources']} distinct source(s), including {k['critical']} critical and "
+        f"{k['high']} high-risk event(s). Overall threat level is assessed as {level}."
+        f"{technique}{cti_txt}{corr_txt}"
+    )
 
 
 def risk_gauge(value: int):
@@ -186,9 +251,18 @@ NAV_ITEMS = [
 # ═══════════════════════════════════════════════════════════════
 #  THREAT CONTROL — module de filtres globaux (barre laterale)
 # ═══════════════════════════════════════════════════════════════
+# Cles des widgets de filtre (pas la navigation) -> effacees par RESET FILTERS.
+FILTER_KEYS = [
+    "f_quick_search", "f_period_preset", "f_period_start", "f_period_end",
+    "f_severity_pills",
+    "f_risk_score", "f_detector", "f_mitre", "f_src_ip", "f_dst_ip",
+    "f_cti_only", "f_corr_only",
+]
+
+
 def sidebar_filters(df_all: pd.DataFrame):
     logo_inner = (f'<img src="{LOGO_URI}" alt="Keystone Group">' if LOGO_URI
-                  else '<span style="color:#fff;font-size:.9rem;">🛡</span>')
+                  else '<span style="color:#fff;font-size:.9rem;">◆</span>')
     sys_ok = "db_error" not in st.session_state
     st.sidebar.markdown(f"""
     <div class="th-brand-row">
@@ -223,78 +297,90 @@ def sidebar_filters(df_all: pd.DataFrame):
     st.sidebar.divider()
 
     with st.sidebar.container(key="quick_search"):
-        text = st.text_input("Recherche rapide", placeholder="🔍  IP, hash, description…",
-                              label_visibility="collapsed")
+        text = st.text_input("Quick search", placeholder="Search IP, hash, description…",
+                              label_visibility="collapsed", key="f_quick_search")
 
-    st.sidebar.markdown('<div class="th-filter-eyebrow">◈ Threat Control</div>', unsafe_allow_html=True)
+    top1, top2 = st.sidebar.columns([2, 1])
+    with top1:
+        st.markdown('<div class="th-filter-eyebrow">◈ Threat Control</div>', unsafe_allow_html=True)
+    with top2:
+        if st.button("Reset", icon=":material/restart_alt:", key="btn_reset_filters",
+                     use_container_width=True):
+            for k in FILTER_KEYS:
+                st.session_state.pop(k, None)
+            st.rerun()
 
-    # --- Periode (from / to + presets) ---
-    with st.sidebar.expander("🕐 PERIODE", expanded=True):
+    # --- Time Range (from / to + presets) ---
+    with st.sidebar.expander("TIME RANGE", expanded=True, icon=":material/schedule:"):
         preset = st.selectbox(
-            "Periode", ["Tout", "Dernieres 24h", "7 derniers jours",
-                        "30 derniers jours", "Personnalise"], label_visibility="collapsed")
+            "Time range", ["All time", "Last 24h", "Last 7 days",
+                        "Last 30 days", "Custom"], label_visibility="collapsed",
+            key="f_period_preset")
         dmin, dmax = data.date_bounds(df_all)
-        if preset == "Personnalise":
+        preset_fr = {"All time": "Tout", "Last 24h": "Dernieres 24h",
+                     "Last 7 days": "7 derniers jours", "Last 30 days": "30 derniers jours",
+                     "Custom": "Personnalise"}[preset]
+        if preset == "Custom":
             c1, c2 = st.columns(2)
-            start = c1.date_input("Du", value=dmin, min_value=dmin, max_value=dmax)
-            end = c2.date_input("Au", value=dmax, min_value=dmin, max_value=dmax)
+            start = c1.date_input("From", value=dmin, min_value=dmin, max_value=dmax, key="f_period_start")
+            end = c2.date_input("To", value=dmax, min_value=dmin, max_value=dmax, key="f_period_end")
         else:
-            start, end = data.preset_range(df_all, preset)
-            st.caption(f"Du {start} au {end}")
+            start, end = data.preset_range(df_all, preset_fr)
+            st.caption(f"{start} → {end}")
 
-    # --- Severite (pastilles compactes, une couleur par niveau) ---
-    with st.sidebar.expander("🎯 SEVERITE", expanded=True):
-        with st.container(key="sev_pills"):
-            c_crit = st.checkbox("CRIT", value=True, key="f_sev_critical")
-            c_high = st.checkbox("HIGH", value=True, key="f_sev_high")
-            c_med = st.checkbox("MED", value=True, key="f_sev_medium")
-            c_low = st.checkbox("LOW", value=True, key="f_sev_low")
-        sevs = [s for s, v in zip(["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-                                   [c_crit, c_high, c_med, c_low]) if v]
+    # --- Severity : st.pills natif (multi-select), theme-aware, aucun hack
+    #     de checkboxes-en-pastilles a maintenir a la main. ---
+    with st.sidebar.expander("SEVERITY", expanded=True, icon=":material/priority_high:"):
+        sevs = st.pills("Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                         selection_mode="multi",
+                         default=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                         label_visibility="collapsed", key="f_severity_pills") or []
 
     # --- Risk score (slider double poignee) ---
-    with st.sidebar.expander("📊 RISK SCORE", expanded=True):
+    with st.sidebar.expander("RISK SCORE", expanded=True, icon=":material/speed:"):
         rmin, rmax = st.slider("Risk score", 0, 100, (0, 100), step=5,
-                                label_visibility="collapsed")
+                                label_visibility="collapsed", key="f_risk_score")
 
-    # --- Detecteur / MITRE ---
-    with st.sidebar.expander("🔬 DETECTEUR & MITRE", expanded=False):
-        detectors = ["Tous"] + (sorted(df_all["detector"].dropna().unique())
+    # --- Detector / MITRE ATT&CK ---
+    with st.sidebar.expander("DETECTOR & MITRE", expanded=False, icon=":material/radar:"):
+        detectors = ["All"] + (sorted(df_all["detector"].dropna().unique())
                                 if not df_all.empty else [])
-        det = st.selectbox("Detecteur", detectors)
-        mitres = ["Toutes"] + (sorted(df_all["mitre"].dropna().unique())
+        det = st.selectbox("Detector", detectors, key="f_detector")
+        mitres = ["All"] + (sorted(df_all["mitre"].dropna().unique())
                                if not df_all.empty else [])
-        mitre = st.selectbox("Technique MITRE", mitres)
+        mitre = st.selectbox("MITRE technique", mitres, key="f_mitre")
 
-    # --- IP source / destination ---
-    with st.sidebar.expander("🌐 RESEAU (IP)", expanded=False):
-        src = st.text_input("IP source contient")
-        dst = st.text_input("IP destination contient")
+    # --- Network / IP ---
+    with st.sidebar.expander("NETWORK / IP", expanded=False, icon=":material/lan:"):
+        src = st.text_input("Source IP contains", key="f_src_ip")
+        dst = st.text_input("Destination IP contains", key="f_dst_ip")
 
-    # --- CTI / correlation ---
-    with st.sidebar.expander("🔗 CTI & CORRELATION", expanded=False):
+    # --- CTI & Correlation ---
+    with st.sidebar.expander("CTI & CORRELATION", expanded=False, icon=":material/link:"):
         c3, c4 = st.columns(2)
-        cti_only = c3.toggle("CTI ✓")
-        corr_only = c4.toggle("Correles")
+        cti_only = c3.toggle("CTI ✓", key="f_cti_only")
+        corr_only = c4.toggle("Correlated", key="f_corr_only")
 
-    # --- Application des filtres ---
+    # --- Application des filtres (dashboard_data, inchange) ---
+    det_all = "Tous" if det == "All" else det
+    mitre_all = "Toutes" if mitre == "All" else mitre
     df = data.filter_by_period(df_all, start, end)
-    df = data.filter_alerts(df, severities=sevs, detector=det, mitre=mitre,
+    df = data.filter_alerts(df, severities=sevs, detector=det_all, mitre=mitre_all,
                             min_risk=rmin, max_risk=rmax, src_ip=src or None,
                             dst_ip=dst or None, cti_only=cti_only,
                             correlated_only=corr_only, text=text or None)
 
     # --- Recapitulatif + export global ---
     st.sidebar.divider()
-    st.sidebar.caption(f"**{len(df)}** / {len(df_all)} alerte(s) apres filtres")
+    st.sidebar.caption(f"**{len(df)} / {len(df_all)}** alerts selected")
     if not df.empty:
         st.sidebar.download_button(
-            "⬇️ Exporter la selection (CSV)",
-            df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False)
+            "Export selection (CSV)", icon=":material/download:",
+            data=df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False)
               .encode("utf-8"),
-            "threathunter_selection.csv", "text/csv",
+            file_name="threathunter_selection.csv", mime="text/csv",
             use_container_width=True)
-    if st.sidebar.button("🔄 Rafraichir", use_container_width=True):
+    if st.sidebar.button("Refresh data", icon=":material/refresh:", use_container_width=True):
         st.cache_data.clear()
     return page, df
 
@@ -315,21 +401,11 @@ def page_home(df):
         {"label": "CTI Sources", "value": len(getattr(settings, "CTI_FEEDS", []))},
     ])
 
+    # Ordre impose : Timeline -> Risk Distribution -> MITRE Techniques,
+    # puis Top Detectors -> Top IOCs, puis Recent Critical Alerts.
     perforated_divider()
     a, b, c = st.columns(3)
     with a:
-        st.subheader("Risk Level Distribution")
-        if k["total"] == 0:
-            empty_state("no alerts", hint="Distribution appears once alerts come in.")
-        else:
-            sc = data.severity_counts(df)
-            fig = px.pie(sc, names="severity", values="count", hole=0.55,
-                         color="severity", color_discrete_map=data.SEV_COLORS)
-            fig.update_layout(height=230, showlegend=True,
-                               legend=dict(font=dict(size=10)))
-            fig.update_traces(marker=dict(line=dict(color=TOKENS["canvas"], width=2)))
-            st.plotly_chart(themed(fig), use_container_width=True, key="ov_severity_pie")
-    with b:
         st.subheader("Threat Activity Timeline")
         if df.empty or df["timestamp"].isna().all():
             empty_state("no temporal data")
@@ -338,73 +414,76 @@ def page_home(df):
             per = t.set_index("timestamp").resample("15min").size().reset_index(name="count")
             fig2 = px.area(per, x="timestamp", y="count")
             fig2.update_traces(line_color=TOKENS["primary"], fillcolor="rgba(255,43,60,0.14)")
-            fig2.update_layout(height=230)
+            fig2.update_layout(height=220)
             st.plotly_chart(themed(fig2), use_container_width=True, key="ov_timeline")
+    with b:
+        st.subheader("Risk Distribution")
+        if k["total"] == 0:
+            empty_state("no alerts", hint="Distribution appears once alerts come in.")
+        else:
+            sc = data.severity_counts(df)
+            fig = px.pie(sc, names="severity", values="count", hole=0.55,
+                         color="severity", color_discrete_map=data.SEV_COLORS)
+            fig.update_layout(height=220, showlegend=True,
+                               legend=dict(font=dict(size=10)))
+            fig.update_traces(marker=dict(line=dict(color=TOKENS["canvas"], width=2)))
+            st.plotly_chart(themed(fig), use_container_width=True, key="ov_severity_pie")
     with c:
-        st.subheader("Top MITRE ATT&CK")
+        st.subheader("MITRE ATT&CK Techniques")
         ranked_list(_top_list(df, "mitre", 6))
 
     perforated_divider()
-    d, e = st.columns([1.4, 1])
+    d, e = st.columns(2)
     with d:
-        st.subheader("Live Threat Map")
-        st.caption("Network flow · source → destination (top active connections)")
-        fig3 = threat_flow_map(df) if not df.empty else None
-        if fig3 is None:
-            empty_state("no active connections for these filters")
-        else:
-            st.plotly_chart(themed(fig3), use_container_width=True, key="ov_threat_map")
+        st.subheader("Top Detectors")
+        ranked_list(_top_list(df, "detector", 6))
     with e:
         st.subheader("Top IOCs")
         ranked_list(_top_list(df, "src_ip", 6))
 
     perforated_divider()
-    f, g = st.columns([1.4, 1])
-    with f:
-        st.subheader("Network Activity")
-        st.caption("Alert volume by detector")
-        if df.empty:
-            empty_state("no data")
-        else:
-            st.plotly_chart(themed(_gradient_bar(data.top_counts(df, "detector", 8), "detector")),
-                             use_container_width=True, key="ov_network")
-    with g:
-        st.subheader("Services")
-        status_row("MongoDB", online="db_error" not in st.session_state)
-        status_row("MISP", online=True, detail=f"{len(getattr(settings,'CTI_FEEDS',[]))} feeds")
-        status_row("OpenCTI", online=False, detail="connector stubbed")
-
-    perforated_divider()
-    st.subheader("Recent Alerts")
-    if df.empty:
-        empty_state("no alerts for current filters",
-                     hint="Widen the time range or run the pipeline: python3 app.py --pcap <capture>")
+    st.subheader("Recent Critical Alerts")
+    crit = df[df["severity"] == "CRITICAL"].head(10) if not df.empty else df
+    if crit.empty:
+        empty_state("no critical alerts in current selection",
+                     hint="Widen Threat Control filters or run the pipeline: python3 app.py --pcap <capture>")
         return
-    st.dataframe(style_severity(df.head(12)[["timestamp", "severity", "risk_score", "detector",
+    st.dataframe(style_severity(crit[["timestamp", "severity", "risk_score", "detector",
                               "src_ip", "dst_ip", "mitre"]]),
-                 use_container_width=True, hide_index=True)
+                 use_container_width=True, hide_index=True,
+                 column_config={"risk_score": st.column_config.ProgressColumn(
+                     "Risk", min_value=0, max_value=100, format="%d")})
 
 
 # ─── Page 2 — Alerts ───────────────────────────────────────────
 def page_alerts(df):
-    section_header("Alerts", eyebrow="Filtered list + detail")
+    section_header("Alerts", eyebrow="Investigation table")
     if df.empty:
-        empty_state("aucune alerte pour ces filtres")
+        empty_state("no alerts for current filters")
         return
-    f = df.sort_values(["sev_rank", "risk_score"], ascending=False)
-    st.caption(f"{len(f)} alerte(s)")
-    st.dataframe(
-        style_severity(f[["timestamp", "severity", "risk_score", "confidence", "detector",
-           "src_ip", "dst_ip", "mitre", "correlated_count", "description"]]),
-        use_container_width=True, hide_index=True)
+    f = df.sort_values(["sev_rank", "risk_score"], ascending=False).reset_index(drop=True)
+    st.caption(f"{len(f)} alert(s) — click a row to inspect")
+
+    display_cols = ["timestamp", "severity", "risk_score", "confidence", "detector",
+                     "src_ip", "dst_ip", "mitre", "correlated_count", "description"]
+    event = st.dataframe(
+        style_severity(f[display_cols]),
+        use_container_width=True, hide_index=True,
+        on_select="rerun", selection_mode="single-row", key="alerts_table",
+        column_config={
+            "risk_score": st.column_config.ProgressColumn(
+                "Risk", min_value=0, max_value=100, format="%d"),
+            "confidence": st.column_config.ProgressColumn(
+                "Conf.", min_value=0.0, max_value=1.0, format="%.2f"),
+            "correlated_count": st.column_config.NumberColumn("Corr."),
+        },
+    )
+    selected_rows = list(event.selection.rows) if event and event.selection else []
+    row = f.iloc[selected_rows[0] if selected_rows else 0]
 
     st.subheader("Detail")
-    idx = st.selectbox("Choisir une alerte", f.index,
-                       format_func=lambda i: f"{f.loc[i,'severity']} — "
-                       f"{f.loc[i,'detector']} ({f.loc[i,'src_ip']})")
-    row = f.loc[idx]
     # Le tampon CRITICAL n'apparait que sur CETTE alerte-la : le seul
-    # orange tolere sur la vue (les autres severites restent en badge neutre).
+    # accent tolere sur la vue (les autres severites restent en badge neutre).
     if (row["severity"] or "").upper() == "CRITICAL":
         st.markdown(critical_stamp("CRITICAL"), unsafe_allow_html=True)
     else:
@@ -418,34 +497,53 @@ def page_alerts(df):
         unsafe_allow_html=True)
     st.write(row["description"])
     if row["correlated_count"] > 1:
-        st.info(f"Incident correle — {row['correlated_count']} alertes "
+        st.info(f"Correlated incident — {row['correlated_count']} alerts "
                 f"({', '.join(row['related_detectors'])})")
     if data._is_cti_hit(row["cti_context"]):
-        st.success("Enrichissement CTI")
+        st.success("CTI enrichment")
         code_well(_pretty_json(row["cti_context"]), label="CTI CONTEXT")
-    with st.expander("Preuves (evidence)"):
+    with st.expander("Evidence"):
         code_well(_pretty_json(row["evidence"]), label="EVIDENCE")
 
 
 # ─── Page 3 — IOC Intelligence ──────────────────────────────────
 def page_ioc(df):
-    section_header("IOC Intelligence", eyebrow="IP · domain · hash · CTI tag")
-    term = st.text_input("Indicateur", placeholder="ex: 203.0.113.66")
+    section_header("IOC Intelligence", eyebrow="Indicator investigation workspace")
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        term = st.text_input("Indicator", placeholder="IP · domain · hash · CTI tag",
+                              label_visibility="collapsed", key="ioc_term")
     if not term:
-        empty_state("en attente d'un indicateur", hint="IP, domaine, hash ou tag CTI a rechercher.")
+        empty_state("awaiting an indicator", hint="Search an IP, domain, hash, or CTI tag to begin.")
         return
-    code_well(term, label="QUERY")
+
+    kind = classify_indicator(term)
+    code_well(term, label=f"QUERY · CLASSIFIED AS {kind}")
     res = data.search_iocs(df, term)
     if res.empty:
-        empty_state(f"aucune correspondance pour « {term} »")
+        empty_state(f"no matches for “{term}”")
         return
-    stat_col, _ = st.columns([1, 3])
-    with stat_col:
-        kpi_card(f"MATCH{'ES' if len(res) > 1 else ''}", len(res), accent=(res["sev_rank"].max() >= 4))
-    st.write("")
+
+    term_l = term.strip().lower()
+    ip_hits = res[res["src_ip"].astype(str).str.lower().str.contains(term_l, na=False) |
+                  res["dst_ip"].astype(str).str.lower().str.contains(term_l, na=False)]
+    cti_hits = res[res["cti_hit"]]
+    corr_hits = res[res["correlated_count"] > 1]
+
+    # Resultats separes par categorie d'enrichissement, pas un seul blob.
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: kpi_card("Indicator Type", kind, accent=True)
+    with c2: kpi_card("IP Matches", len(ip_hits))
+    with c3: kpi_card("CTI Hits", len(cti_hits))
+    with c4: kpi_card("Correlated", len(corr_hits))
+
+    perforated_divider()
+    st.subheader(f"{len(res)} matching alert(s)")
     st.dataframe(style_severity(res[["timestamp", "severity", "detector", "src_ip", "dst_ip",
                       "mitre", "risk_score", "description"]]),
-                 use_container_width=True, hide_index=True)
+                 use_container_width=True, hide_index=True,
+                 column_config={"risk_score": st.column_config.ProgressColumn(
+                     "Risk", min_value=0, max_value=100, format="%d")})
 
 
 # ─── Page 4 — Network Activity ─────────────────────────────────
@@ -458,9 +556,9 @@ def _gradient_bar(counts_df, col):
 
 
 def page_network(df):
-    section_header("Network Activity", eyebrow="Top talkers & techniques")
+    section_header("Network Activity", eyebrow="Top talkers, detectors & anomalies")
     if df.empty:
-        empty_state("aucune alerte pour ces filtres")
+        empty_state("no alerts for current filters")
         return
 
     top_src = data.top_counts(df, "src_ip", 10)
@@ -468,31 +566,48 @@ def page_network(df):
         offender = top_src.iloc[0]
         oc1, oc2 = st.columns([1, 3])
         with oc1:
-            kpi_card("Top offender", int(offender["count"]),
-                     delta=f"{offender['src_ip']} · source la plus active", accent=True)
+            kpi_card("Top Offender", int(offender["count"]),
+                     delta=f"{offender['src_ip']} · most active source", accent=True)
         with oc2:
             st.write("")
     perforated_divider()
 
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Top IP sources")
+        st.subheader("Top Source IPs")
         st.plotly_chart(themed(_gradient_bar(top_src, "src_ip")), use_container_width=True,
                          key="net_top_src")
     with c2:
-        st.subheader("Top IP destinations")
+        st.subheader("Top Destination IPs")
         st.plotly_chart(themed(_gradient_bar(data.top_counts(df, "dst_ip", 10), "dst_ip")),
                          use_container_width=True, key="net_top_dst")
+
+    perforated_divider()
     c3, c4 = st.columns(2)
     with c3:
-        st.subheader("Alertes par detecteur")
+        st.subheader("Top Talkers")
+        st.caption("Most active IPs, source or destination combined")
+        ranked_list(_top_talkers(df, 8))
+    with c4:
+        st.subheader("Detector Activity")
         st.plotly_chart(themed(_gradient_bar(data.top_counts(df, "detector", 12), "detector")),
                          use_container_width=True, key="net_detector")
-    with c4:
-        st.subheader("Techniques MITRE ATT&CK")
+
+    perforated_divider()
+    c5, c6 = st.columns(2)
+    with c5:
+        st.subheader("MITRE Techniques")
         fig = px.pie(data.top_counts(df, "mitre", 12), names="mitre", values="count", hole=0.45)
         fig.update_traces(marker=dict(line=dict(color=TOKENS["canvas"], width=2)))
         st.plotly_chart(themed(fig), use_container_width=True, key="net_mitre_pie")
+    with c6:
+        st.subheader("Network Anomalies")
+        st.caption("Source → destination flow, weighted by connection volume")
+        fig3 = threat_flow_map(df)
+        if fig3 is None:
+            empty_state("no active connections for these filters")
+        else:
+            st.plotly_chart(themed(fig3), use_container_width=True, key="net_anomalies")
 
 
 # ─── Page 5 — Threat Timeline ──────────────────────────────────
@@ -500,55 +615,81 @@ SEV_SYMBOLS = {"CRITICAL": "diamond", "HIGH": "triangle-up", "MEDIUM": "circle",
 
 
 def page_timeline(df):
-    section_header("Threat Timeline", eyebrow="Sequence of events")
+    section_header("Threat Timeline", eyebrow="Investigation timeline")
     if df.empty or df["timestamp"].isna().all():
-        empty_state("pas de donnees temporelles pour ces filtres")
+        empty_state("no temporal data for current filters")
         return
     t = df.dropna(subset=["timestamp"]).copy()
+    st.caption("Marker shape = severity (◆ critical · ▲ high · ● medium/low) · "
+               "hover an event for detector, IPs, MITRE technique and correlation.")
     fig = px.scatter(t, x="timestamp", y="severity", color="severity",
                      color_discrete_map=data.SEV_COLORS,
                      symbol="severity", symbol_map=SEV_SYMBOLS,
                      size=t["risk_score"].fillna(10),
-                     hover_data=["detector", "src_ip", "dst_ip", "mitre"],
+                     hover_data=["detector", "src_ip", "dst_ip", "mitre", "correlated_count"],
                      category_orders={"severity": ["LOW","MEDIUM","HIGH","CRITICAL"]})
-    fig.update_layout(height=420, showlegend=False)
+    fig.update_layout(height=400, showlegend=False)
     fig.update_traces(marker=dict(line=dict(color=TOKENS["canvas"], width=1)))
     st.plotly_chart(themed(fig), use_container_width=True, key="timeline_scatter")
-    st.subheader("Volume dans le temps")
+    st.subheader("Event Volume Over Time")
     per = t.set_index("timestamp").resample("1min").size().reset_index(name="count")
     fig2 = px.area(per, x="timestamp", y="count", template=data.PLOTLY_TEMPLATE)
     fig2.update_traces(line_color=TOKENS["primary"],
                         fillcolor="rgba(255,43,60,0.14)")
+    fig2.update_layout(height=200)
     st.plotly_chart(themed(fig2), use_container_width=True, key="timeline_volume")
 
 
 # ─── Page 6 — Hunting Queries ──────────────────────────────────
 def page_hunting(df):
-    section_header("Hunting Queries", eyebrow="Free-form investigation on the current selection")
+    section_header("Hunting Queries", eyebrow="Analyst investigation workspace")
     if df.empty:
-        empty_state("aucune alerte pour ces filtres")
+        empty_state("no alerts for current filters")
         return
+
+    st.caption("Runs on top of the current Threat Control selection.")
+    q1, q2 = st.columns([5, 1])
+    with q1:
+        query = st.text_input("Query", placeholder="Search description, IOC, MITRE ID…",
+                               label_visibility="collapsed", key="hunt_query")
+    with q2:
+        st.button("Execute", icon=":material/play_arrow:", type="primary",
+                   use_container_width=True, key="hunt_execute")
+
+    result_df = data.search_iocs(df, query) if query else df
+    code_well(query or "(no query — showing full current selection)", label="ACTIVE QUERY")
+
+    if result_df.empty:
+        empty_state("no results", hint="Adjust the query or widen Threat Control filters.")
+        return
+
     kpi_strip([
-        {"label": "Resultats", "value": len(df)},
-        {"label": "Detecteurs", "value": df["detector"].nunique()},
-        {"label": "IP sources", "value": df["src_ip"].nunique()},
-        {"label": "Risk moyen", "value": int(df["risk_score"].mean()) if df["risk_score"].notna().any() else 0},
+        {"label": "Result Count", "value": len(result_df)},
+        {"label": "Detector Matches", "value": result_df["detector"].nunique()},
+        {"label": "IOC Matches", "value": int(result_df["cti_hit"].sum())},
+        {"label": "Risk Summary", "value": int(result_df["risk_score"].mean())
+                     if result_df["risk_score"].notna().any() else 0},
     ])
     perforated_divider()
-    show = df[["timestamp", "severity", "risk_score", "detector",
+    st.subheader("Results")
+    show = result_df[["timestamp", "severity", "risk_score", "detector",
                "src_ip", "dst_ip", "mitre", "description"]]
-    st.dataframe(style_severity(show), use_container_width=True, hide_index=True)
-    st.download_button("⬇️ Exporter ce resultat (CSV)",
-                       show.to_csv(index=False).encode("utf-8"),
-                       "hunting_export.csv", "text/csv")
+    st.dataframe(style_severity(show), use_container_width=True, hide_index=True,
+                 column_config={"risk_score": st.column_config.ProgressColumn(
+                     "Risk", min_value=0, max_value=100, format="%d")})
+    st.download_button("Export results (CSV)", icon=":material/download:",
+                       data=show.to_csv(index=False).encode("utf-8"),
+                       file_name="hunting_export.csv", mime="text/csv")
 
 
 # ─── Page 7 — Reports ───────────────────────────────────────────
 def page_reports(df):
-    section_header("Reports", eyebrow="Executive summary of the current selection")
+    section_header("Reports", eyebrow="Incident summary report")
     k = data.compute_kpis(df)
     level, level_detail = threat_level(k)
     threat_level_banner(level, level_detail)
+    report_block(_executive_summary(df, k, level), label="EXECUTIVE SUMMARY")
+    perforated_divider()
 
     kpi_strip([
         {"label": "Total Alerts", "value": k["total"]},
@@ -581,43 +722,46 @@ def page_reports(df):
     st.caption(f"{len(df)} alert(s) in current selection — export for hand-off or archival.")
     exp1, exp2 = st.columns(2)
     with exp1:
-        st.download_button("⬇ Export CSV",
-                           df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False).encode("utf-8"),
-                           "threathunter_report.csv", "text/csv", use_container_width=True)
+        st.download_button("Export CSV", icon=":material/download:",
+                           data=df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False).encode("utf-8"),
+                           file_name="threathunter_report.csv", mime="text/csv", use_container_width=True)
     with exp2:
         summary = {
             "generated_for": f"{len(df)} alerts",
             "threat_level": level,
+            "executive_summary": _executive_summary(df, k, level),
             "kpis": k,
             "top_mitre": _top_list(df, "mitre", 10),
             "top_detectors": _top_list(df, "detector", 10),
         }
-        st.download_button("⬇ Export Summary (JSON)",
-                           _pretty_json(summary).encode("utf-8"),
-                           "threathunter_report_summary.json", "application/json",
+        st.download_button("Export Summary (JSON)", icon=":material/download:",
+                           data=_pretty_json(summary).encode("utf-8"),
+                           file_name="threathunter_report_summary.json", mime="application/json",
                            use_container_width=True)
 
 
 # ─── Page 8 — Settings ──────────────────────────────────────────
 def page_settings(df):
-    section_header("Settings", eyebrow="Read-only")
-    st.subheader("Etat des services")
+    section_header("Settings", eyebrow="Technical configuration · read-only")
+    st.subheader("Service Status")
     status_row("MongoDB", online="db_error" not in st.session_state,
-                detail="injoignable — mode degrade" if "db_error" in st.session_state else "connecte")
-    status_row("MISP", online=True, detail=f"{len(getattr(settings,'CTI_FEEDS',[]))} flux configures")
-    status_row("OpenCTI", online=False, detail="connecteur code, non branche")
+                detail="unreachable — degraded mode" if "db_error" in st.session_state else "connected")
+    status_row("MISP", online=True, detail=f"{len(getattr(settings,'CTI_FEEDS',[]))} feed(s) configured")
+    status_row("OpenCTI", online=False, detail="connector implemented, not wired up")
 
     perforated_divider()
-    st.subheader("Base de donnees")
-    code_well(f"MONGO_URI = {getattr(settings,'MONGO_URI','N/A')}\n"
+    st.subheader("Database")
+    # MONGO_URI peut embarquer des identifiants (mongodb://user:pass@host/) —
+    # jamais affiches en clair, meme en lecture seule.
+    code_well(f"MONGO_URI = {_mask_uri(getattr(settings, 'MONGO_URI', 'N/A'))}\n"
               f"DB_NAME   = {getattr(settings,'DB_NAME','N/A')}")
-    st.subheader("Flux CTI")
+    st.subheader("CTI Feeds")
     feeds = getattr(settings, "CTI_FEEDS", [])
     if feeds:
         st.markdown(" ".join(mono_chip(f) for f in feeds), unsafe_allow_html=True)
     else:
-        st.caption("Aucun flux configure.")
-    st.subheader("Seuils de detection")
+        st.caption("No feeds configured.")
+    st.subheader("Detection Thresholds")
     code_well(_pretty_json(getattr(settings, "THRESHOLDS", {})))
 
 

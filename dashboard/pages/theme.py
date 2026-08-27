@@ -111,10 +111,14 @@ def _css() -> str:
   color: {t['ink']};
 }}
 .main .block-container {{
-  max-width: 1320px;
-  padding-top: 1.4rem;
-  padding-bottom: 3rem;
+  max-width: 1360px;
+  padding-top: .9rem;
+  padding-bottom: 2.4rem;
 }}
+/* Streamlit espace chaque bloc vertical d'origine assez large ; on resserre
+   pour une densite "poste operateur" plutot qu'un site vitrine. */
+.main [data-testid="stVerticalBlock"] {{ gap: .5rem; }}
+[data-testid="stElementContainer"] {{ margin-bottom: 0 !important; }}
 
 /* ---- Typographie : dense, enterprise — pas de titres XXL ---- */
 html, body, [class*="css"], .stMarkdown, p, span, div, label, .stMetricLabel {{
@@ -137,10 +141,18 @@ code, kbd, pre, .mono {{
 }}
 a, a:visited {{ color: {t['primary']} !important; }}
 
-/* ---- Barre laterale : panneau releve noir, rouge = navigation active ---- */
+/* ---- Barre laterale : panneau releve noir, rouge = navigation active ----
+   Narrow deliberement (poste operateur, pas un site vitrine) : le panneau
+   THREAT CONTROL est en accordeon compact, pas besoin de large. ---- */
 section[data-testid="stSidebar"] {{
   background: {t['surface_bone']};
   border-right: 1px solid {t['hairline']};
+  min-width: 300px !important;
+  max-width: 300px !important;
+}}
+section[data-testid="stSidebar"] > div {{ padding-top: .6rem; }}
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+  padding-left: 1.1rem; padding-right: 1.1rem;
 }}
 section[data-testid="stSidebar"] * {{ color: {t['ink']}; }}
 section[data-testid="stSidebar"] h1,
@@ -164,10 +176,11 @@ section[data-testid="stSidebar"] h3 {{ letter-spacing:-.5px !important; }}
 }}
 
 /* ---- Navigation laterale : boutons a icones (Material), pas d'emoji ----
-   Chaque bouton nav vit dans le conteneur cle .st-key-main_nav : on
-   reecrit son apparence (transparent, filet gauche) et on reserve le
-   rouge plein a l'entree active (type="primary" pilote depuis Python). */
-.st-key-main_nav {{ gap: 1px !important; }}
+   Volontairement SIMPLE : pas de hack sur le <p> interne, pas de compteur
+   injecte en markdown-couleur (source de desalignement selon la longueur
+   du label / la police chargee ou non). Juste icone + texte, filet gauche
+   pour l'etat actif (type="primary" pilote depuis Python). */
+.st-key-main_nav {{ gap: 2px !important; }}
 .st-key-main_nav .stButton > button {{
   font-family: 'Inter', sans-serif !important;
   font-weight: 500;
@@ -180,7 +193,7 @@ section[data-testid="stSidebar"] h3 {{ letter-spacing:-.5px !important; }}
   border: none;
   border-left: 3px solid transparent;
   border-radius: 4px !important;
-  padding: 7px 10px !important;
+  padding: 8px 10px !important;
   color: {t['charcoal']};
   transition: background .12s ease, border-color .12s ease, color .12s ease;
 }}
@@ -205,31 +218,42 @@ section[data-testid="stSidebar"] h3 {{ letter-spacing:-.5px !important; }}
 
 /* ---- Panneau de filtres : dense, groupe, premium ----------------------- */
 
-/* Resserre l'empilement vertical natif de la sidebar */
+/* Resserre l'empilement vertical natif de la sidebar — UNE seule regle de
+   rythme vertical pour tout le panneau, plutot que des cas particuliers
+   par type de widget (source frequente de desalignement). */
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{
-  gap: .4rem;
+  gap: .55rem;
 }}
 section[data-testid="stSidebar"] label {{
   font-size: .78rem !important;
   color: {t['charcoal']} !important;
-  margin-bottom: .1rem !important;
 }}
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {{
-  margin-top: -.25rem;
-}}
-section[data-testid="stSidebar"] .stTextInput input,
-section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
-section[data-testid="stSidebar"] .stDateInput input {{
-  padding-top: 6px !important;
-  padding-bottom: 6px !important;
-  font-size: .82rem !important;
+  margin-top: -.3rem;
 }}
 
-/* Eyebrow "FILTER PANEL" au-dessus des sections repliables */
+/* Eyebrow "THREAT CONTROL" au-dessus des sections repliables */
 .th-filter-eyebrow {{
   font-family: 'JetBrains Mono', monospace;
   font-size: .7rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: .14em; color: {t['mute']}; margin: .6rem 0 .3rem 0;
+  letter-spacing: .14em; color: {t['mute']};
+  white-space: nowrap;
+  display: flex; align-items: center; height: 2.4rem;
+}}
+
+/* Bouton RESET FILTERS : compact et sur une seule ligne, meme dans une
+   colonne etroite (le style .stButton par defaut — majuscules, 10px 20px
+   de padding — est trop large pour la place disponible ici). */
+.st-key-btn_reset_filters .stButton > button {{
+  padding: 6px 10px !important;
+  font-size: .7rem !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+  width: 100%;
+}}
+.st-key-btn_reset_filters .stButton > button span[data-testid="stIconMaterial"] {{
+  font-size: .9rem;
 }}
 
 /* Sections repliables (st.expander) : cartes sombres compactes */
@@ -237,23 +261,25 @@ section[data-testid="stSidebar"] [data-testid="stExpander"] {{
   background: {t['surface_card']};
   border: 1px solid {t['hairline']};
   border-radius: 8px;
-  margin-bottom: .45rem;
 }}
 section[data-testid="stSidebar"] [data-testid="stExpander"] summary {{
-  padding: 8px 12px !important;
+  padding: 10px 12px !important;
   font-family: 'JetBrains Mono', monospace !important;
-  font-size: .72rem !important;
+  font-size: .7rem !important;
   font-weight: 700 !important;
   text-transform: uppercase;
-  letter-spacing: .07em;
+  letter-spacing: .05em;
   color: {t['charcoal']} !important;
   min-height: 0 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }}
 section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{
   color: {t['ink']} !important;
 }}
 section[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {{
-  padding: 2px 12px 10px 12px !important;
+  padding: 4px 12px 12px 12px !important;
 }}
 
 /* Barre de recherche libre : toujours visible, en tete du panneau */
@@ -262,50 +288,14 @@ section[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpa
   font-family: 'JetBrains Mono', monospace !important;
 }}
 
-/* Pastilles de severite : 4 checkboxes cote a cote, chacune sa couleur.
-   Scope via st.container(key="sev_pills") -> .st-key-sev_pills EST le
-   stVerticalBlock lui-meme (confirme par inspection du DOM reel) ; on
-   force le passage en ligne malgre le flex-column natif de Streamlit.
-   Chaque checkbox a un key= propre -> Streamlit lui donne deja une classe
-   st-key-<key> UNIQUE sur son .element-container : on cible ces classes
-   directement, plus fiable qu'un nth-of-type (chaque case est enveloppee
-   dans son propre .element-container, ce qui casse le comptage de freres). */
-.st-key-sev_pills {{
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 5px !important;
-  flex-wrap: nowrap !important;
-}}
-.st-key-sev_pills [data-testid="stElementContainer"] {{
-  flex: 1 1 0 !important;
-  min-width: 0 !important;
-  width: auto !important;
-}}
-.st-key-sev_pills [data-testid="stCheckbox"] label {{
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 9999px; border: 1px solid {t['hairline']};
-  padding: 5px 0; margin: 0; width: 100%;
-  background: {t['canvas']};
-  font-family: 'JetBrains Mono', monospace; font-size: .66rem; font-weight: 700;
-  letter-spacing: .02em; text-transform: uppercase; color: {t['mute']};
-  cursor: pointer; transition: background .12s ease, border-color .12s ease, color .12s ease;
-}}
-/* icone de coche : c'est le 1er <div> parmi les enfants du label (le tout
-   premier enfant est un <span> d'input masque pour l'accessibilite) */
-.st-key-sev_pills [data-testid="stCheckbox"] label > div:nth-of-type(1) {{
-  display: none;
-}}
-.st-key-f_sev_critical [data-testid="stCheckbox"] label:has(input:checked) {{
-  background: rgba(255,43,60,.16); border-color: {t['sev_critical']}; color: {t['sev_critical']};
-}}
-.st-key-f_sev_high [data-testid="stCheckbox"] label:has(input:checked) {{
-  background: rgba(255,176,32,.16); border-color: {t['sev_high']}; color: {t['sev_high']};
-}}
-.st-key-f_sev_medium [data-testid="stCheckbox"] label:has(input:checked) {{
-  background: rgba(209,163,0,.16); border-color: {t['sev_medium']}; color: {t['sev_medium']};
-}}
-.st-key-f_sev_low [data-testid="stCheckbox"] label:has(input:checked) {{
-  background: rgba(35,209,139,.16); border-color: {t['sev_low']}; color: {t['sev_low']};
+/* Pastilles de severite : st.pills natif (theme-aware), pas un hack de
+   checkboxes — s'aligne toujours correctement, quelle que soit la police
+   chargee ou la largeur disponible. */
+section[data-testid="stSidebar"] [data-testid="stPills"] {{ gap: 5px; }}
+section[data-testid="stSidebar"] [data-testid="stPills"] button {{
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: .68rem !important;
+  padding: 4px 10px !important;
 }}
 
 /* ---- Metriques Streamlit natives ---- */
@@ -669,6 +659,24 @@ def code_well(content: str, label: str | None = None) -> None:
     """)
 
 
+def report_block(text: str, label: str | None = None) -> None:
+    """Bloc de prose façon rapport d'incident (pas un well technique) : filet
+    rouge a gauche, typographie Inter normale — pour un paragraphe narratif
+    (executive summary), distinct des donnees brutes de code_well."""
+    t = TOKENS
+    lab = (f"<div style=\"font-family:'JetBrains Mono';font-size:.68rem;font-weight:600;"
+           f"color:{t['primary']};text-transform:uppercase;letter-spacing:.12em;"
+           f"margin-bottom:.5rem;\">{html.escape(str(label))}</div>") if label else ""
+    safe_text = html.escape(str(text))
+    _emit(f"""
+    <div style="background:{t['surface_card']};border-left:3px solid {t['primary']};
+                border-radius:0 6px 6px 0;padding:16px 20px;">
+      {lab}
+      <div style="font-family:'Inter';font-size:.92rem;line-height:1.6;color:{t['body']};">{safe_text}</div>
+    </div>
+    """)
+
+
 def section_header(title: str, eyebrow: str | None = None, accent: bool = False) -> None:
     """Titre de section : eyebrow façon prompt terminal (chevron rouge) + filet degrade."""
     t = TOKENS
@@ -677,11 +685,11 @@ def section_header(title: str, eyebrow: str | None = None, accent: bool = False)
           f"margin-bottom:.3rem;\"><span style=\"color:{t['primary']};\">&gt;</span> {html.escape(str(eyebrow))}</div>"
           ) if eyebrow else ""
     _emit(f"""
-    <div style="margin:1.5rem 0 .8rem 0;">
+    <div style="margin:.1rem 0 .7rem 0;">
       {eb}
-      <div style="font-family:'Bricolage Grotesque';font-weight:700;font-size:1.3rem;
+      <div style="font-family:'Bricolage Grotesque';font-weight:700;font-size:1.25rem;
                   letter-spacing:-.4px;line-height:1.2;color:{t['ink']};">{html.escape(str(title))}</div>
-      <div style="height:1px;margin-top:.6rem;
+      <div style="height:1px;margin-top:.5rem;
                   background:linear-gradient(90deg,{t['primary']},transparent 45%);"></div>
     </div>
     """)
@@ -691,7 +699,7 @@ def perforated_divider() -> None:
     """Filet pointille discret entre deux blocs d'une meme section."""
     t = TOKENS
     st.markdown(
-        f"<div style=\"height:0;border-top:1px dashed {t['hairline']};margin:1.6rem 0;\"></div>",
+        f"<div style=\"height:0;border-top:1px dashed {t['hairline']};margin:.9rem 0;\"></div>",
         unsafe_allow_html=True)
 
 
