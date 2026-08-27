@@ -15,6 +15,15 @@ PCAP_DIR = BASE_DIR / "pcap"                        # captures réseau
 LOGS_DIR = BASE_DIR / "logs"                        # logs générés par Zeek
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")  # voir .env
 DB_NAME   = os.getenv("DB_NAME", "threathunter")
+# ─── Authentification du dashboard (compte admin unique) ──────
+# JAMAIS de mot de passe en clair : seul le hash bcrypt est stocke, dans .env.
+# Choix .env (et pas MongoDB) : le dashboard doit rester utilisable en mode
+# degrade quand MongoDB est injoignable — les identifiants doivent donc etre
+# disponibles sans base.
+# Generer / mettre a jour :  python -m dashboard.pages.auth --create-admin
+ADMIN_USERNAME      = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")   # $2b$12$....
+
 # ─── Connexion MISP ───────────────────────────────────────────
 MISP_URL    = os.getenv("MISP_URL", "https://192.168.100.20")
 MISP_KEY    = os.getenv("MISP_KEY", "")   # jamais en dur : voir .env

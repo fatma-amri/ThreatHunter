@@ -26,14 +26,17 @@ from database.db import Database
 from config import settings
 import dashboard_data as data
 
-st.set_page_config(page_title="ThreatHunter SOC", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="ThreatHunter SOC", page_icon="🛡️", layout="wide",
+                   initial_sidebar_state="expanded")
 MAX_ALERTS = 2000
 from dashboard.pages.theme import (
-    inject_theme, section_header, kpi_card, kpi_strip, severity_badge,
-    critical_stamp, mono_chip, code_well, report_block, perforated_divider,
-    plotly_layout, empty_state, status_row, threat_level_banner, ranked_list,
-    TOKENS,
+    inject_theme, section_header, kpi_card, kpi_icon_card, kpi_strip,
+    severity_badge, critical_stamp, mono_chip, code_well, report_block,
+    perforated_divider, panel_title, plotly_layout, plotly_layout_dark,
+    empty_state, status_row, threat_level_banner, ranked_list,
+    sidebar_state_pill, TOKENS,
 )
+from dashboard.pages.auth import require_auth, logout_button
 
 
 def _load_logo_data_uri() -> str | None:
@@ -50,10 +53,9 @@ def _load_logo_data_uri() -> str | None:
 LOGO_URI = _load_logo_data_uri()
 
 inject_theme()
-# NB : pas d'app_header() ici — la marque (logo + "ThreatHunter" + "SOC ·
-# Keystone Group") vit UNIQUEMENT dans la sidebar (sidebar_filters()). La
-# repeter en tete de CHAQUE page dupliquerait le branding et mangerait de
-# l'espace vertical ; chaque page a deja son propre section_header().
+# NB : la marque (logo Keystone + "THREATHUNTER" + "SOC · KEYSTONE GROUP" +
+# "● SYSTEM OPERATIONAL") vit UNIQUEMENT dans la barre laterale permanente
+# (sidebar_nav()). Chaque page a deja son propre section_header().
 
 
 @st.cache_data(ttl=30)
@@ -79,8 +81,15 @@ def _pretty_json(obj) -> str:
 
 
 def themed(fig):
-    """Applique l'habillage Plotly du theme (fond transparent, filets, tooltip well sombre)."""
+    """Applique l'habillage Plotly du theme creme (fond transparent, filets hairline)."""
     fig.update_layout(**plotly_layout())
+    return fig
+
+
+def themed_dark(fig):
+    """Variante pour un graphique qui vit DANS un darkpanel_ (fond encre) :
+    police et filets clairs plutot que sombres."""
+    fig.update_layout(**plotly_layout_dark())
     return fig
 
 
@@ -166,19 +175,22 @@ def threat_flow_map(df: pd.DataFrame):
     dsts = flows["dst_ip"].unique().tolist()
     src_idx = {ip: i for i, ip in enumerate(srcs)}
     dst_idx = {ip: i + len(srcs) for i, ip in enumerate(dsts)}
+    # Lit dans un darkpanel_ (fond encre) : noeuds/liens en tons clairs,
+    # jamais l'orange de marque ici — c'est un diagramme de flux generique,
+    # pas un signal de severite.
     fig = go.Figure(go.Sankey(
         arrangement="snap",
         node=dict(
             label=srcs + dsts,
-            color=[TOKENS["mute"]] * len(srcs) + [TOKENS["primary"]] * len(dsts),
+            color=["rgba(252,252,252,0.45)"] * len(srcs) + [TOKENS["on_dark"]] * len(dsts),
             pad=10, thickness=10,
-            line=dict(color=TOKENS["hairline"], width=0.5),
+            line=dict(color=TOKENS["divider_dark"], width=0.5),
         ),
         link=dict(
             source=[src_idx[s] for s in flows["src_ip"]],
             target=[dst_idx[d] for d in flows["dst_ip"]],
             value=flows["count"],
-            color="rgba(255,43,60,0.22)",
+            color="rgba(252,252,252,0.16)",
         ),
     ))
     fig.update_layout(height=300, font=dict(size=11))
@@ -214,38 +226,191 @@ def _executive_summary(df: pd.DataFrame, k: dict, level: str) -> str:
     )
 
 
-def risk_gauge(value: int):
-    v = value or 0
-    bar_color = TOKENS["primary"] if v >= 70 else TOKENS["sev_high"] if v >= 45 else TOKENS["mute"]
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=v,
-        number={"font": {"family": "Bricolage Grotesque, sans-serif", "size": 44, "color": TOKENS["ink"]}},
-        gauge={"axis": {"range": [0, 100], "tickcolor": TOKENS["hairline_strong"]},
-               "bar": {"color": bar_color},
-               "bgcolor": "rgba(0,0,0,0)",
-               "bordercolor": TOKENS["hairline"],
-               "steps": [{"range": [0, 45], "color": TOKENS["surface_bone"]},
-                         {"range": [45, 70], "color": "rgba(255,176,32,0.14)"},
-                         {"range": [70, 100], "color": TOKENS["stamp_tint"]}]},
-        title={"text": "Risk score max", "font": {"family": "Inter, sans-serif", "size": 14, "color": TOKENS["charcoal"]}}))
-    fig.update_layout(height=240, margin=dict(l=20, r=20, t=40, b=10),
-                       paper_bgcolor="rgba(0,0,0,0)",
-                       font=dict(family="Inter, sans-serif", color=TOKENS["ink"]))
+_SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+
+def severity_radar(df: pd.DataFrame):
+    """'Threat Distribution by Severity' — radar a 4 axes, part (%) de
+    chaque niveau dans la selection courante (donnee reelle, severity_counts)."""
+    sc = data.severity_counts(df).set_index("severity")
+    total = sc["count"].sum() or 1
+    pct = [round(100 * sc.loc[s, "count"] / total) for s in _SEV_ORDER]
+    theta = _SEV_ORDER + [_SEV_ORDER[0]]
+    r = pct + [pct[0]]
+    fig = go.Figure(go.Scatterpolar(
+        r=r, theta=theta, fill="toself",
+        line=dict(color=TOKENS["primary"], width=2),
+        fillcolor="rgba(224,30,43,0.16)",
+        hovertemplate="%{theta}: %{r}%<extra></extra>",
+    ))
+    fig.update_layout(
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(visible=True, range=[0, 100], showticklabels=True,
+                             tickfont=dict(size=8, color=TOKENS["mute"]),
+                             gridcolor=TOKENS["hairline"]),
+            angularaxis=dict(gridcolor=TOKENS["hairline"],
+                              tickfont=dict(color=TOKENS["ink"], size=11)),
+        ),
+        showlegend=False, height=250, margin=dict(l=30, r=30, t=20, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=TOKENS["ink"]),
+    )
+    return fig
+
+
+def detection_reliability_donut(df: pd.DataFrame):
+    """'Detection Reliability' — repartition REELLE (pas inventee) de la
+    selection : confirme par la CTI / corrobore par plusieurs detecteurs
+    (correlated_count>1) / signal d'un seul detecteur, non confirme."""
+    if df.empty:
+        return None, {}
+    cti = int(df["cti_hit"].sum())
+    corr_only = int(((df["correlated_count"] > 1) & (~df["cti_hit"])).sum())
+    single = int(len(df) - cti - corr_only)
+    labels = ["CTI-confirmed", "Correlated", "Single-source"]
+    values = [cti, corr_only, single]
+    # "Correlated" n'est pas un signal critique — l'encre neutre plutot que
+    # le tampon orange, reserve au vrai hit CTI/severite.
+    colors = [TOKENS["sev_low"], TOKENS["ink"], TOKENS["sev_medium"]]
+    fig = go.Figure(go.Pie(labels=labels, values=values, hole=0.68,
+                            marker=dict(colors=colors,
+                                        line=dict(color=TOKENS["surface_card"], width=2)),
+                            textinfo="none", sort=False))
+    fig.update_layout(
+        height=210, showlegend=True,
+        legend=dict(font=dict(size=10, color=TOKENS["charcoal"]), orientation="h",
+                    yanchor="bottom", y=-.25),
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=TOKENS["ink"]),
+    )
+    pct_cti = round(100 * cti / len(df)) if len(df) else 0
+    return fig, {"cti": cti, "corr_only": corr_only, "single": single, "pct_cti": pct_cti}
+
+
+def severity_ring(value: int, total: int, color: str):
+    """Anneau circulaire (donut a 2 parts) pour une severite donnee — le
+    nombre reel au centre, l'anneau colore represente sa part du total."""
+    total = total or 1
+    pct = value / total
+    # La piste (portion vide) doit rester lisible sur une carte blanche —
+    # surface_bone est trop proche du blanc pour marquer le contraste ici.
+    fig = go.Figure(go.Pie(
+        values=[pct, 1 - pct], hole=0.72, sort=False, direction="clockwise",
+        marker=dict(colors=[color, "rgba(255,255,255,0.07)"]),
+        textinfo="none", hoverinfo="skip",
+    ))
+    fig.update_layout(
+        showlegend=False, height=130, margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        annotations=[dict(text=str(value), x=0.5, y=0.5, showarrow=False,
+                          font=dict(size=20, color=TOKENS["ink"], family="Rajdhani, sans-serif"))],
+    )
+    return fig
+
+
+def trend_by_severity(df: pd.DataFrame):
+    """'Threat Trends Over Time' — une ligne par severite (donnee reelle,
+    resample sur la selection), pas une seule courbe generique."""
+    t = df.dropna(subset=["timestamp"])
+    per = (t.set_index("timestamp").groupby("severity")
+             .resample("30min").size().rename("count").reset_index())
+    fig = px.line(per, x="timestamp", y="count", color="severity",
+                  color_discrete_map=data.SEV_COLORS,
+                  category_orders={"severity": _SEV_ORDER})
+    fig.update_traces(mode="lines")
+    fig.update_layout(height=230, showlegend=True,
+                       legend=dict(font=dict(size=9, color=TOKENS["charcoal"]),
+                                   orientation="h", yanchor="bottom", y=1.02, x=0))
+    return fig
+
+
+def _gradient_bar_vertical(counts_df, col):
+    # Compte generique (pas une severite) : degrade encre, pas le tampon
+    # orange — reserve au CTA / a CRITICAL.
+    fig = px.bar(counts_df, x=col, y="count",
+                 color="count", color_continuous_scale=[TOKENS["surface_bone"], TOKENS["ink"]])
+    fig.update_layout(coloraxis_showscale=False, xaxis=dict(categoryorder="total descending"))
+    fig.update_traces(marker_line_width=0)
     return fig
 
 
 # Navigation : (libelle affiche, icone Material Symbols — pas d'emoji).
 # Le libelle EST la cle utilisee dans PAGES plus bas.
+# Libelles de nav COURTS (comme la reference : "Dashboard / Summary / Alert
+# / Activities / Data / Settings", tous un seul mot) — huit items dans une
+# barre horizontale n'ont pas la place pour des libelles longs ("Network
+# Activity" force un retour a la ligne caractere par caractere). Le titre
+# complet de chaque page reste dans son propre section_header().
 NAV_ITEMS = [
-    ("Overview", "dashboard"),
+    ("Overview", "grid_view"),
     ("Alerts", "warning"),
     ("IOC Intelligence", "fingerprint"),
-    ("Network Activity", "hub"),
+    ("Network Activity", "lan"),
     ("Threat Timeline", "timeline"),
     ("Hunting Queries", "travel_explore"),
     ("Reports", "summarize"),
     ("Settings", "settings"),
 ]
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SIDEBAR NAV — barre laterale permanente (marque + navigation)
+# ═══════════════════════════════════════════════════════════════
+def sidebar_nav(k_all: dict) -> None:
+    """Barre laterale permanente — ZONE 1 (identite + etat + session) et
+    ZONE 2 (navigation), separees par un filet.
+
+    ZONE 1 : logo Keystone (asset fourni tel quel) + 'ThreatHunter' +
+    'SOC · Keystone Group', une pastille d'etat unifiee (verte = operationnel,
+    orange = alertes critiques actives, rouge = base injoignable / mode
+    degrade), puis l'identite de session + 'Sign out'.
+
+    ZONE 2 : les 8 pages. L'item actif porte une fine barre d'accent + un
+    voile leger (pas d'aplat rouge) ; les items inactifs restent sobres,
+    icones alignees en gouttiere."""
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = NAV_ITEMS[0][0]
+    logo_inner = (f'<img src="{LOGO_URI}" alt="Keystone Group">' if LOGO_URI
+                  else '<span style="color:#e01e2b;font-size:1.1rem;">&#9670;</span>')
+    crit = int(k_all.get("critical", 0) or 0)
+    degraded = "db_error" in st.session_state
+
+    with st.sidebar:
+        # ── ZONE 1 — identite + etat + session ──────────────────
+        with st.container(key="sb_identity"):
+            st.markdown(f"""
+            <div class="th-brand">
+              <div class="th-brand-logo">{logo_inner}</div>
+              <div>
+                <div class="th-brand-name">ThreatHunter</div>
+                <div class="th-brand-sub">SOC · Keystone Group</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Pastille d'etat unifiee (systeme / MongoDB) — un seul composant.
+            if degraded:
+                sidebar_state_pill("Database offline · degraded mode", "crit")
+            elif crit:
+                n = crit if crit < 100 else "99+"
+                sidebar_state_pill(f"{n} active critical alert" + ("s" if crit != 1 else ""), "warn")
+            else:
+                sidebar_state_pill("System operational", "ok")
+
+            logout_button()   # identite de session + Sign out (auth.py)
+
+        # ── ZONE 2 — navigation ────────────────────────────────
+        with st.container(key="sb_nav"):
+            st.markdown('<div class="th-nav-label">Navigation</div>', unsafe_allow_html=True)
+            for name, icon in NAV_ITEMS:
+                is_active = st.session_state.current_page == name
+                if st.button(name, icon=f":material/{icon}:", key=f"nav_{icon}",
+                             use_container_width=True,
+                             type="primary" if is_active else "secondary"):
+                    st.session_state.current_page = name
+                    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -261,185 +426,207 @@ FILTER_KEYS = [
 
 
 def sidebar_filters(df_all: pd.DataFrame):
-    logo_inner = (f'<img src="{LOGO_URI}" alt="Keystone Group">' if LOGO_URI
-                  else '<span style="color:#fff;font-size:.9rem;">◆</span>')
-    sys_ok = "db_error" not in st.session_state
-    st.sidebar.markdown(f"""
-    <div class="th-brand-row">
-      <div class="th-logo-chip">{logo_inner}</div>
-      <div>
-        <div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:1.1rem;
-                    letter-spacing:-.3px;line-height:1.15;color:{TOKENS['ink']};">ThreatHunter</div>
-        <div style="font-family:'JetBrains Mono';font-size:.6rem;font-weight:600;
-                    text-transform:uppercase;letter-spacing:.1em;color:{TOKENS['primary']};">SOC · Keystone Group</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;margin:.35rem 0 .7rem 0;">
-      <span class="th-status-dot" style="background:{TOKENS['sev_low'] if sys_ok else TOKENS['primary']};"></span>
-      <span style="font-family:'JetBrains Mono';font-size:.64rem;color:{TOKENS['charcoal']};
-                   text-transform:uppercase;letter-spacing:.07em;">
-        {'System Operational' if sys_ok else 'Degraded — DB Unreachable'}
-      </span>
-    </div>
-    """, unsafe_allow_html=True)
+    """ZONE 3 — module THREAT CONTROL, dans la meme barre laterale.
 
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = NAV_ITEMS[0][0]
-    with st.sidebar.container(key="main_nav"):
-        for name, icon in NAV_ITEMS:
-            is_active = st.session_state.current_page == name
-            if st.button(name, icon=f":material/{icon}:", key=f"nav_{icon}",
-                         use_container_width=True,
-                         type="primary" if is_active else "secondary"):
-                st.session_state.current_page = name
+    En-tete 'Threat Control' + Reset, champ de recherche libre, puis 6
+    accordeons au style homogene (TIME RANGE, SEVERITY, RISK SCORE,
+    DETECTOR & MITRE, NETWORK / IP, CTI & CORRELATION), et un pied de zone :
+    compteur 'X / Y alerts selected' + export CSV + Refresh data.
+
+    Tous les widgets, leurs cles (f_*) et la logique de filtrage sont
+    INCHANGES : seul l'emballage visuel (conteneur keyed 'sb_filters',
+    accordeons) evolue."""
+    with st.sidebar:
+      with st.container(key="sb_filters"):
+        # --- En-tete de zone : label + Reset ---
+        top1, top2 = st.columns([1.55, 1])
+        with top1:
+            st.markdown('<div class="th-filter-eyebrow">Threat Control</div>',
+                        unsafe_allow_html=True)
+        with top2:
+            if st.button("Reset", key="btn_reset_filters", use_container_width=True):
+                for k in FILTER_KEYS:
+                    st.session_state.pop(k, None)
                 st.rerun()
-    page = st.session_state.current_page
-    st.sidebar.divider()
 
-    with st.sidebar.container(key="quick_search"):
-        text = st.text_input("Quick search", placeholder="Search IP, hash, description…",
-                              label_visibility="collapsed", key="f_quick_search")
+        # --- Recherche libre ---
+        with st.container(key="quick_search"):
+            text = st.text_input(
+                "Quick search", placeholder="Search IP, hash, description…",
+                label_visibility="collapsed", key="f_quick_search")
 
-    top1, top2 = st.sidebar.columns([2, 1])
-    with top1:
-        st.markdown('<div class="th-filter-eyebrow">◈ Threat Control</div>', unsafe_allow_html=True)
-    with top2:
-        if st.button("Reset", icon=":material/restart_alt:", key="btn_reset_filters",
-                     use_container_width=True):
-            for k in FILTER_KEYS:
-                st.session_state.pop(k, None)
-            st.rerun()
+        # --- Accordeon 1 : Time Range (from / to + presets) ---
+        with st.expander("TIME RANGE", expanded=True, icon=":material/schedule:"):
+            preset = st.selectbox(
+                "Time range", ["All time", "Last 24h", "Last 7 days",
+                               "Last 30 days", "Custom"], label_visibility="collapsed",
+                key="f_period_preset")
+            dmin, dmax = data.date_bounds(df_all)
+            preset_fr = {"All time": "Tout", "Last 24h": "Dernieres 24h",
+                         "Last 7 days": "7 derniers jours", "Last 30 days": "30 derniers jours",
+                         "Custom": "Personnalise"}[preset]
+            if preset == "Custom":
+                c1, c2 = st.columns(2)
+                start = c1.date_input("From", value=dmin, min_value=dmin, max_value=dmax, key="f_period_start")
+                end = c2.date_input("To", value=dmax, min_value=dmin, max_value=dmax, key="f_period_end")
+            else:
+                # Bornes calculees a partir du preset (plus de sous-titre
+                # "date → date" affiche : le preset se suffit a lui-meme).
+                start, end = data.preset_range(df_all, preset_fr)
 
-    # --- Time Range (from / to + presets) ---
-    with st.sidebar.expander("TIME RANGE", expanded=True, icon=":material/schedule:"):
-        preset = st.selectbox(
-            "Time range", ["All time", "Last 24h", "Last 7 days",
-                        "Last 30 days", "Custom"], label_visibility="collapsed",
-            key="f_period_preset")
-        dmin, dmax = data.date_bounds(df_all)
-        preset_fr = {"All time": "Tout", "Last 24h": "Dernieres 24h",
-                     "Last 7 days": "7 derniers jours", "Last 30 days": "30 derniers jours",
-                     "Custom": "Personnalise"}[preset]
-        if preset == "Custom":
-            c1, c2 = st.columns(2)
-            start = c1.date_input("From", value=dmin, min_value=dmin, max_value=dmax, key="f_period_start")
-            end = c2.date_input("To", value=dmax, min_value=dmin, max_value=dmax, key="f_period_end")
-        else:
-            start, end = data.preset_range(df_all, preset_fr)
-            st.caption(f"{start} → {end}")
+        # --- Accordeon 2 : Severity (st.pills multi-select) ---
+        # La cle "f_severity_pills" sert d'accroche CSS pour la teinte
+        # semantique par position (rouge / orange / jaune / vert).
+        with st.expander("SEVERITY", expanded=True, icon=":material/priority_high:"):
+            sevs = st.pills("Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                            selection_mode="multi",
+                            default=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                            label_visibility="collapsed", key="f_severity_pills") or []
 
-    # --- Severity : st.pills natif (multi-select), theme-aware, aucun hack
-    #     de checkboxes-en-pastilles a maintenir a la main. ---
-    with st.sidebar.expander("SEVERITY", expanded=True, icon=":material/priority_high:"):
-        sevs = st.pills("Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-                         selection_mode="multi",
-                         default=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-                         label_visibility="collapsed", key="f_severity_pills") or []
+        # --- Accordeon 3 : Risk score (slider 0-100) ---
+        with st.expander("RISK SCORE", expanded=True, icon=":material/speed:"):
+            rmin, rmax = st.slider("Risk score", 0, 100, (0, 100), step=5,
+                                   label_visibility="collapsed", key="f_risk_score")
 
-    # --- Risk score (slider double poignee) ---
-    with st.sidebar.expander("RISK SCORE", expanded=True, icon=":material/speed:"):
-        rmin, rmax = st.slider("Risk score", 0, 100, (0, 100), step=5,
-                                label_visibility="collapsed", key="f_risk_score")
-
-    # --- Detector / MITRE ATT&CK ---
-    with st.sidebar.expander("DETECTOR & MITRE", expanded=False, icon=":material/radar:"):
-        detectors = ["All"] + (sorted(df_all["detector"].dropna().unique())
+        # --- Accordeon 4 : Detector / MITRE ATT&CK ---
+        with st.expander("DETECTOR & MITRE", expanded=False, icon=":material/radar:"):
+            detectors = ["All"] + (sorted(df_all["detector"].dropna().unique())
+                                   if not df_all.empty else [])
+            det = st.selectbox("Detector", detectors, key="f_detector")
+            mitres = ["All"] + (sorted(df_all["mitre"].dropna().unique())
                                 if not df_all.empty else [])
-        det = st.selectbox("Detector", detectors, key="f_detector")
-        mitres = ["All"] + (sorted(df_all["mitre"].dropna().unique())
-                               if not df_all.empty else [])
-        mitre = st.selectbox("MITRE technique", mitres, key="f_mitre")
+            mitre = st.selectbox("MITRE technique", mitres, key="f_mitre")
 
-    # --- Network / IP ---
-    with st.sidebar.expander("NETWORK / IP", expanded=False, icon=":material/lan:"):
-        src = st.text_input("Source IP contains", key="f_src_ip")
-        dst = st.text_input("Destination IP contains", key="f_dst_ip")
+        # --- Accordeon 5 : Network / IP ---
+        with st.expander("NETWORK / IP", expanded=False, icon=":material/lan:"):
+            src = st.text_input("Source IP contains", key="f_src_ip")
+            dst = st.text_input("Destination IP contains", key="f_dst_ip")
 
-    # --- CTI & Correlation ---
-    with st.sidebar.expander("CTI & CORRELATION", expanded=False, icon=":material/link:"):
-        c3, c4 = st.columns(2)
-        cti_only = c3.toggle("CTI ✓", key="f_cti_only")
-        corr_only = c4.toggle("Correlated", key="f_corr_only")
+        # --- Accordeon 6 : CTI & Correlation ---
+        with st.expander("CTI & CORRELATION", expanded=False, icon=":material/link:"):
+            c3, c4 = st.columns(2)
+            cti_only = c3.toggle("CTI ✓", key="f_cti_only")
+            corr_only = c4.toggle("Correlated", key="f_corr_only")
 
-    # --- Application des filtres (dashboard_data, inchange) ---
-    det_all = "Tous" if det == "All" else det
-    mitre_all = "Toutes" if mitre == "All" else mitre
-    df = data.filter_by_period(df_all, start, end)
-    df = data.filter_alerts(df, severities=sevs, detector=det_all, mitre=mitre_all,
-                            min_risk=rmin, max_risk=rmax, src_ip=src or None,
-                            dst_ip=dst or None, cti_only=cti_only,
-                            correlated_only=corr_only, text=text or None)
+        # --- Application des filtres (dashboard_data, INCHANGE) ---
+        det_all = "Tous" if det == "All" else det
+        mitre_all = "Toutes" if mitre == "All" else mitre
+        df = data.filter_by_period(df_all, start, end)
+        df = data.filter_alerts(df, severities=sevs, detector=det_all, mitre=mitre_all,
+                                min_risk=rmin, max_risk=rmax, src_ip=src or None,
+                                dst_ip=dst or None, cti_only=cti_only,
+                                correlated_only=corr_only, text=text or None)
 
-    # --- Recapitulatif + export global ---
-    st.sidebar.divider()
-    st.sidebar.caption(f"**{len(df)} / {len(df_all)}** alerts selected")
-    if not df.empty:
-        st.sidebar.download_button(
-            "Export selection (CSV)", icon=":material/download:",
-            data=df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False)
-              .encode("utf-8"),
-            file_name="threathunter_selection.csv", mime="text/csv",
-            use_container_width=True)
-    if st.sidebar.button("Refresh data", icon=":material/refresh:", use_container_width=True):
-        st.cache_data.clear()
-    return page, df
+        # --- Pied de zone : compteur + actions ---
+        st.markdown(
+            f'<div class="th-filter-count"><strong>{len(df)}</strong> / {len(df_all)} '
+            f'alerts selected</div>', unsafe_allow_html=True)
+        if not df.empty:
+            st.download_button(
+                "Export selection (CSV)", icon=":material/download:",
+                data=df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False)
+                  .encode("utf-8"),
+                file_name="threathunter_selection.csv", mime="text/csv",
+                use_container_width=True)
+        with st.container(key="btn_refresh"):
+            if st.button("Refresh data", icon=":material/refresh:", use_container_width=True):
+                st.cache_data.clear()
+    return df
 
 
 # ─── Page 1 — Overview ──────────────────────────────────────────
 def page_home(df):
-    section_header("Overview", eyebrow="Real-time threat posture")
+    section_header("Threat Intelligence Overview", eyebrow="Real-time SOC posture")
     k = data.compute_kpis(df)
     level, level_detail = threat_level(k)
     threat_level_banner(level, level_detail)
 
-    kpi_strip([
-        {"label": "Total Alerts", "value": k["total"]},
-        {"label": "Critical Alerts", "value": k["critical"], "accent": True},
-        {"label": "High Risk", "value": k["high"]},
-        {"label": "IOC Matches", "value": k["cti_hits"]},
-        {"label": "Active Incidents", "value": k["correlated"]},
-        {"label": "CTI Sources", "value": len(getattr(settings, "CTI_FEEDS", []))},
-    ])
-
-    # Ordre impose : Timeline -> Risk Distribution -> MITRE Techniques,
-    # puis Top Detectors -> Top IOCs, puis Recent Critical Alerts.
-    perforated_divider()
-    a, b, c = st.columns(3)
-    with a:
-        st.subheader("Threat Activity Timeline")
-        if df.empty or df["timestamp"].isna().all():
-            empty_state("no temporal data")
-        else:
-            t = df.dropna(subset=["timestamp"])
-            per = t.set_index("timestamp").resample("15min").size().reset_index(name="count")
-            fig2 = px.area(per, x="timestamp", y="count")
-            fig2.update_traces(line_color=TOKENS["primary"], fillcolor="rgba(255,43,60,0.14)")
-            fig2.update_layout(height=220)
-            st.plotly_chart(themed(fig2), use_container_width=True, key="ov_timeline")
-    with b:
-        st.subheader("Risk Distribution")
-        if k["total"] == 0:
-            empty_state("no alerts", hint="Distribution appears once alerts come in.")
-        else:
-            sc = data.severity_counts(df)
-            fig = px.pie(sc, names="severity", values="count", hole=0.55,
-                         color="severity", color_discrete_map=data.SEV_COLORS)
-            fig.update_layout(height=220, showlegend=True,
-                               legend=dict(font=dict(size=10)))
-            fig.update_traces(marker=dict(line=dict(color=TOKENS["canvas"], width=2)))
-            st.plotly_chart(themed(fig), use_container_width=True, key="ov_severity_pie")
-    with c:
-        st.subheader("MITRE ATT&CK Techniques")
-        ranked_list(_top_list(df, "mitre", 6))
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1: kpi_icon_card("emergency_home", "Total Alerts", k["total"], tone="primary")
+    with k2: kpi_icon_card("block", "Critical Alerts", k["critical"], tone="danger")
+    with k3: kpi_icon_card("bolt", "High Risk", k["high"], tone="amber")
+    with k4: kpi_icon_card("fingerprint", "IOC Matches", k["cti_hits"], tone="teal")
+    with k5: kpi_icon_card("hub", "Active Incidents", k["correlated"], tone="violet")
 
     perforated_divider()
-    d, e = st.columns(2)
-    with d:
-        st.subheader("Top Detectors")
-        ranked_list(_top_list(df, "detector", 6))
-    with e:
-        st.subheader("Top IOCs")
-        ranked_list(_top_list(df, "src_ip", 6))
+
+    # Bento-grid a 3 colonnes, comme un poste de controle SOC : distribution
+    # (radar+donut) | carte de flux + tops | tendance + repartition + anneaux.
+    col_left, col_mid, col_right = st.columns([1, 1.35, 1])
+
+    with col_left:
+        with st.container(key="panel_radar"):
+            panel_title("Threat Distribution by Severity")
+            if k["total"] == 0:
+                empty_state("no alerts")
+            else:
+                st.plotly_chart(themed(severity_radar(df)), use_container_width=True,
+                                 key="ov_radar", config={"displayModeBar": False})
+        with st.container(key="panel_donut"):
+            panel_title("Detection Reliability")
+            fig, mix = detection_reliability_donut(df)
+            if fig is None:
+                empty_state("no alerts")
+            else:
+                st.plotly_chart(themed(fig), use_container_width=True,
+                                 key="ov_donut", config={"displayModeBar": False})
+                st.caption(f"{mix['pct_cti']}% of alerts confirmed against threat intelligence")
+
+    with col_mid:
+        # Le seul bandeau sombre de la page — le rythme "creme -> encre ->
+        # creme" du fichier de reference, applique a la seule donnee qui le
+        # merite vraiment ici : la topologie reseau, traitee comme un well
+        # technique imprime plutot qu'une carte comme les autres.
+        with st.container(key="darkpanel_map"):
+            panel_title("Network Threat Map", subtitle="source → destination flow")
+            fig3 = threat_flow_map(df) if not df.empty else None
+            if fig3 is None:
+                empty_state("no active connections for these filters", on_dark=True)
+            else:
+                st.plotly_chart(themed_dark(fig3), use_container_width=True,
+                                 key="ov_threat_map", config={"displayModeBar": False})
+        with st.container(key="panel_lists"):
+            lc1, lc2 = st.columns(2)
+            with lc1:
+                panel_title("Top MITRE Techniques")
+                ranked_list(_top_list(df, "mitre", 5))
+            with lc2:
+                panel_title("Top Detectors")
+                ranked_list(_top_list(df, "detector", 5))
+
+    with col_right:
+        with st.container(key="panel_trend"):
+            panel_title("Threat Trends Over Time")
+            if df.empty or df["timestamp"].isna().all():
+                empty_state("no temporal data")
+            else:
+                st.plotly_chart(themed(trend_by_severity(df)), use_container_width=True,
+                                 key="ov_trend", config={"displayModeBar": False})
+        with st.container(key="panel_breakdown"):
+            panel_title("Breakdown of Alerts by Detector")
+            if df.empty:
+                empty_state("no data")
+            else:
+                st.plotly_chart(themed(_gradient_bar_vertical(data.top_counts(df, "detector", 8), "detector")),
+                                 use_container_width=True, key="ov_breakdown",
+                                 config={"displayModeBar": False})
+
+    perforated_divider()
+    with st.container(key="panel_rings"):
+        panel_title("Alerts by Severity")
+        sc = data.severity_counts(df).set_index("severity")
+        total = int(sc["count"].sum()) or 1
+        ring_colors = {"CRITICAL": TOKENS["danger"], "HIGH": TOKENS["sev_high"],
+                       "MEDIUM": TOKENS["sev_medium"], "LOW": TOKENS["sev_low"]}
+        rc = st.columns(4)
+        for col, sev in zip(rc, _SEV_ORDER):
+            with col:
+                v = int(sc.loc[sev, "count"])
+                st.plotly_chart(severity_ring(v, total, ring_colors[sev]),
+                                 use_container_width=True, key=f"ring_{sev}",
+                                 config={"displayModeBar": False})
+                st.markdown(f"<div style='text-align:center;font-size:.8rem;color:{TOKENS['charcoal']};"
+                            f"margin-top:-.6rem;'>{sev.title()}</div>", unsafe_allow_html=True)
 
     perforated_divider()
     st.subheader("Recent Critical Alerts")
@@ -531,10 +718,12 @@ def page_ioc(df):
     corr_hits = res[res["correlated_count"] > 1]
 
     # Resultats separes par categorie d'enrichissement, pas un seul blob.
+    # accent (rouge) reserve au signal reellement alarmant : un hit CTI
+    # confirme — pas juste la carte "type d'indicateur", informative.
     c1, c2, c3, c4 = st.columns(4)
-    with c1: kpi_card("Indicator Type", kind, accent=True)
+    with c1: kpi_card("Indicator Type", kind)
     with c2: kpi_card("IP Matches", len(ip_hits))
-    with c3: kpi_card("CTI Hits", len(cti_hits))
+    with c3: kpi_card("CTI Hits", len(cti_hits), accent=len(cti_hits) > 0)
     with c4: kpi_card("Correlated", len(corr_hits))
 
     perforated_divider()
@@ -548,8 +737,10 @@ def page_ioc(df):
 
 # ─── Page 4 — Network Activity ─────────────────────────────────
 def _gradient_bar(counts_df, col):
+    # Compte generique (pas une severite) : degrade encre, pas le tampon
+    # orange — reserve au CTA / a CRITICAL.
     fig = px.bar(counts_df, x="count", y=col, orientation="h",
-                 color="count", color_continuous_scale=[TOKENS["surface_bone"], TOKENS["primary"]])
+                 color="count", color_continuous_scale=[TOKENS["surface_bone"], TOKENS["ink"]])
     fig.update_layout(coloraxis_showscale=False, yaxis=dict(categoryorder="total ascending"))
     fig.update_traces(marker_line_width=0)
     return fig
@@ -601,13 +792,13 @@ def page_network(df):
         fig.update_traces(marker=dict(line=dict(color=TOKENS["canvas"], width=2)))
         st.plotly_chart(themed(fig), use_container_width=True, key="net_mitre_pie")
     with c6:
-        st.subheader("Network Anomalies")
-        st.caption("Source → destination flow, weighted by connection volume")
-        fig3 = threat_flow_map(df)
-        if fig3 is None:
-            empty_state("no active connections for these filters")
-        else:
-            st.plotly_chart(themed(fig3), use_container_width=True, key="net_anomalies")
+        with st.container(key="darkpanel_net_anomalies"):
+            panel_title("Network Anomalies", subtitle="source → destination flow")
+            fig3 = threat_flow_map(df)
+            if fig3 is None:
+                empty_state("no active connections for these filters", on_dark=True)
+            else:
+                st.plotly_chart(themed_dark(fig3), use_container_width=True, key="net_anomalies")
 
 
 # ─── Page 5 — Threat Timeline ──────────────────────────────────
@@ -634,8 +825,10 @@ def page_timeline(df):
     st.subheader("Event Volume Over Time")
     per = t.set_index("timestamp").resample("1min").size().reset_index(name="count")
     fig2 = px.area(per, x="timestamp", y="count", template=data.PLOTLY_TEMPLATE)
+    # Volume d'evenements (toutes severites) : trace rouge Keystone, remplissage
+    # rouge tres dilue — lecture "activite / tempo de la menace".
     fig2.update_traces(line_color=TOKENS["primary"],
-                        fillcolor="rgba(255,43,60,0.14)")
+                        fillcolor="rgba(224,30,43,0.12)")
     fig2.update_layout(height=200)
     st.plotly_chart(themed(fig2), use_container_width=True, key="timeline_volume")
 
@@ -777,12 +970,38 @@ PAGES = {
 }
 
 
+def degraded_banner() -> None:
+    """Bandeau clair en haut du contenu quand MongoDB est injoignable — le
+    dashboard reste utilisable (etats vides propres), il ne plante pas.
+    Icone en SVG inline (aucune dependance de police -> toujours net)."""
+    icon = (
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+        f'style="flex-shrink:0;"><path d="M7 18h9a4 4 0 0 0 .8-7.92A6 6 0 0 0 5.2 8.5" '
+        f'stroke="{TOKENS["sev_high"]}" stroke-width="1.7" stroke-linecap="round"/>'
+        f'<path d="M4 4l16 16" stroke="{TOKENS["sev_high"]}" stroke-width="1.7" stroke-linecap="round"/></svg>')
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:10px;'
+        f'border:1px solid {TOKENS["sev_high"]}55;border-left:3px solid {TOKENS["sev_high"]};'
+        f'background:{TOKENS["sev_high"]}12;border-radius:8px;padding:11px 16px;margin-bottom:.8rem;">'
+        f'{icon}'
+        f'<span style="font-size:.86rem;color:{TOKENS["body"]};">'
+        f'<strong style="color:{TOKENS["ink"]};">Degraded mode</strong> — '
+        f'the alert database is unreachable. Showing empty states until it comes back online.'
+        f'</span></div>',
+        unsafe_allow_html=True)
+
+
 def main():
+    # Barriere d'authentification : rien n'est charge ni affiche avant login.
+    require_auth(LOGO_URI)
+
     df_all = load_data()
-    page, df = sidebar_filters(df_all)
+    sidebar_nav(data.compute_kpis(df_all))   # zones 1 + 2 (identite/etat/session + nav)
+    df = sidebar_filters(df_all)             # zone 3 (Threat Control)
+
     if "db_error" in st.session_state:
-        st.sidebar.error("MongoDB injoignable — mode degrade")
-    PAGES[page](df)
+        degraded_banner()
+    PAGES[st.session_state.current_page](df)
 
 
 main()

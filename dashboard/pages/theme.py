@@ -1,26 +1,24 @@
 """
-Theme ThreatHunter — "SOC evidence board / terminal console" (Keystone Group).
+Theme ThreatHunter — dark SOC moderne, sobre et lisible.
 
-Pas un site vitrine : un poste operateur. Canvas quasi-noir, rouge/noir
-Keystone comme couleur STRUCTURELLE (nav, en-tetes, tampon CRITICAL, CTA) —
-pas une simple pointe de couleur reservee. Wells noir pur type "log brut"
-pour IP/hashs/IOC/Zeek. Coins en "equerres de visee" sur les cartes cles,
-tampon encreur pivote pour CRITICAL, curseur clignotant dans l'entete,
-diviseurs en degrade rouge->transparent façon signal.
+Direction :
+  - Fond slate profond, surfaces legerement relevees, hairlines discretes,
+    beaucoup d'air. Pas de "terminal hacker", pas de scanlines, pas de glow.
+  - UNE couleur d'accent : rouge Keystone (#e01e2b), utilisee avec parcimonie
+    (liens, focus, etat actif de nav, bouton primaire, 1 KPI critique).
+  - Echelle semantique de severite : Critical (rouge) / High (orange) /
+    Medium (jaune) / Low (vert).
+  - Typographie : Inter pour toute l'UI (casse normale) ; JetBrains Mono
+    UNIQUEMENT pour IP / hash / IOC / identifiants MITRE (helper mono_chip).
+  - Style 100 % centralise : un seul inject_theme() = un seul bloc <style>
+    pilote par des variables CSS. Aucun style disperse dans les pages.
 
-UTILISATION (une seule ligne dans ton dashboard) :
+UTILISATION :
 
     from dashboard.pages.theme import inject_theme
-    inject_theme()   # a appeler juste apres st.set_page_config(...)
+    inject_theme()   # juste apres st.set_page_config(...)
 
-Puis, pour les composants signature (optionnel) :
-
-    from dashboard.pages.theme import (
-        kpi_card, severity_badge, critical_stamp, mono_chip,
-        code_well, section_header, perforated_divider, plotly_layout,
-    )
-
-Aucune dependance autre que streamlit. Ne touche pas a ta logique de donnees.
+API publique conservee (memes noms/signatures, memes cles TOKENS).
 """
 from __future__ import annotations
 import html
@@ -28,792 +26,922 @@ import streamlit as st
 
 
 # ─────────────────────────────────────────────────────────────
-#  JETONS DE DESIGN — rouge/noir Keystone, poste operateur SOC
+#  JETONS DE DESIGN — source de verite unique (aussi exposee en CSS vars)
 # ─────────────────────────────────────────────────────────────
 TOKENS = {
-    # Marque / accent — le rouge Keystone est STRUCTUREL : nav, entetes,
-    # CTA, CRITICAL. Pas un tampon rare, une signature qui revient.
-    "primary":        "#ff2b3c",
-    "primary_deep":   "#a4111f",
-    "primary_glow":   "rgba(255,43,60,0.45)",
-    "stamp_tint":     "rgba(255,43,60,0.14)",
-    "hero_glow":      "#ff6a5c",
-    "hero_pink":      "#7ea6ff",   # bleu froid technique, pour varier les series de graphes
-    # Surfaces quasi-noires, jamais de blanc
-    "canvas":         "#0a0a0d",
-    "surface_bone":   "#1c1c21",   # panneaux releves (sidebar, en-tete de table)
-    "surface_card":   "#141417",   # cartes / KPI
-    "surface_dark":   "#000000",   # well le plus profond (IOC/log brut)
-    "surface_deep":   "#000000",
+    # Accent unique — rouge Keystone, dose avec parcimonie
+    "primary":         "#e01e2b",
+    "primary_deep":    "#b3141f",
+    "primary_soft":    "rgba(224,30,43,0.12)",
+    "on_primary":      "#ffffff",
+    "danger":          "#e01e2b",
+    "danger_deep":     "#b3141f",
+    "stamp_tint":      "rgba(224,30,43,0.12)",
+    "link":            "#ff6b73",
+    "ring_focus":      "rgba(224,30,43,0.40)",
+    # compat (anciens alias encore reference ailleurs)
+    "danger_glow":     "rgba(224,30,43,0.28)",
+    "primary_bright":  "#ff4d59",
+    "hero_glow":       "#ff6b73",
+    "hero_pink":       "#f4a8a0",
+
+    # Surfaces — slate profond -> releve
+    "canvas":          "#0f1216",
+    "surface_bone":    "#14181e",
+    "surface_card":    "#161a20",
+    "surface_raised":  "#1c222b",
+    "surface_dark":    "#0b0e12",
+    "surface_deep":    "#080a0d",
+
     # Texte
-    "ink":            "#f2f1ec",
-    "body":           "#c9c8c2",
-    "charcoal":       "#98979f",
-    "mute":           "#7d7d86",
-    "ash":            "#5c5b63",
-    "on_dark":        "#f2f1ec",
-    "on_dark_mute":   "rgba(242,241,236,0.72)",
+    "ink":             "#e6e9ef",
+    "body":            "#c2c8d2",
+    "charcoal":        "#9aa3b0",
+    "mute":            "#7b8492",
+    "ash":             "#5c6472",
+    "stone":           "#3a414c",
+    "on_dark":         "#eef1f6",
+    "on_dark_mute":    "rgba(238,241,246,0.62)",
+
     # Lignes
-    "hairline":       "rgba(255,255,255,0.10)",
-    "hairline_strong":"rgba(255,255,255,0.26)",
-    "divider_dark":   "rgba(255,255,255,0.20)",
-    "grid_dot":       "rgba(255,255,255,0.035)",
-    # Semantique cyber (severite)
-    "sev_critical":   "#ff2b3c",   # = primary
-    "sev_high":       "#ffb020",
-    "sev_medium":     "#d1a300",
-    "sev_low":        "#23d18b",
-    "sev_info":       "#7d7d86",
+    "hairline":        "rgba(255,255,255,0.08)",
+    "hairline_strong": "rgba(255,255,255,0.16)",
+    "divider_dark":    "rgba(255,255,255,0.10)",
+
+    # Severite
+    "sev_critical":    "#e01e2b",
+    "sev_high":        "#f5872b",
+    "sev_medium":      "#e8c341",
+    "sev_low":         "#3ecf8e",
+    "sev_info":        "#7b8492",
+    "badge_success":   "#3ecf8e",
 }
 
 
 # ─────────────────────────────────────────────────────────────
-#  CSS GLOBAL — injecte le look complet dans Streamlit
+#  CSS GLOBAL — un seul bloc, pilote par variables
 # ─────────────────────────────────────────────────────────────
 def _css() -> str:
     t = TOKENS
     return f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {{
-  --primary: {t['primary']};
-  --primary-deep: {t['primary_deep']};
-  --primary-glow: {t['primary_glow']};
-  --canvas: {t['canvas']};
-  --bone: {t['surface_bone']};
-  --card: {t['surface_card']};
-  --dark: {t['surface_dark']};
-  --ink: {t['ink']};
-  --charcoal: {t['charcoal']};
-  --mute: {t['mute']};
-  --hairline: {t['hairline']};
-  --hairline-strong: {t['hairline_strong']};
+  --th-bg: {t['canvas']};
+  --th-surface: {t['surface_card']};
+  --th-surface-2: {t['surface_raised']};
+  --th-surface-sunken: {t['surface_dark']};
+  --th-border: {t['hairline']};
+  --th-border-strong: {t['hairline_strong']};
+  --th-text: {t['ink']};
+  --th-text-soft: {t['body']};
+  --th-text-muted: {t['charcoal']};
+  --th-text-faint: {t['mute']};
+  --th-accent: {t['primary']};
+  --th-accent-deep: {t['primary_deep']};
+  --th-accent-soft: {t['primary_soft']};
+  --sev-critical: {t['sev_critical']};
+  --sev-high: {t['sev_high']};
+  --sev-medium: {t['sev_medium']};
+  --sev-low: {t['sev_low']};
+  --th-radius: 10px;
+  --th-radius-sm: 7px;
 }}
 
-@keyframes th-blink {{ 0%, 49% {{ opacity: 1; }} 50%, 100% {{ opacity: 0; }} }}
-@keyframes th-pulse {{
-  0%, 100% {{ box-shadow: 0 0 0 0 rgba(255,43,60,.55); }}
-  50%      {{ box-shadow: 0 0 16px 3px rgba(255,43,60,.4); }}
+@keyframes th-breathe {{
+  0%, 100% {{ opacity: 1; }}
+  50%      {{ opacity: .45; }}
 }}
 
-/* ---- Canvas quasi-noir : grille technique fine + vignette rouge tres subtile ----
-   Une vraie grille (papier millimetre) plutot qu'une trame de points :
-   plus "poste operateur / plan technique" qu'un fond decoratif. ---- */
+/* ---- Base ---- */
 .stApp {{
-  background-color: {t['canvas']};
-  background-image:
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px),
-    linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px),
-    radial-gradient(ellipse at 15% 0%, rgba(255,43,60,0.055), transparent 55%);
-  background-size: auto, 42px 42px, 42px 42px, auto;
-  color: {t['ink']};
+  background: var(--th-bg);
+  color: var(--th-text);
 }}
 .main .block-container {{
-  max-width: 1360px;
-  padding-top: .9rem;
-  padding-bottom: 2.4rem;
+  max-width: 1520px;
+  padding-top: 1.4rem;
+  padding-bottom: 3rem;
 }}
-/* Streamlit espace chaque bloc vertical d'origine assez large ; on resserre
-   pour une densite "poste operateur" plutot qu'un site vitrine. */
-.main [data-testid="stVerticalBlock"] {{ gap: .5rem; }}
+.main [data-testid="stVerticalBlock"] {{ gap: .8rem; }}
 [data-testid="stElementContainer"] {{ margin-bottom: 0 !important; }}
 
-/* ---- Typographie : dense, enterprise — pas de titres XXL ---- */
-html, body, [class*="css"], .stMarkdown, p, span, div, label, .stMetricLabel {{
-  font-family: 'Inter', system-ui, sans-serif;
-  color: {t['ink']};
-  letter-spacing: 0;
+html, body, [class*="css"], .stMarkdown, p, span, div, label, input, button, .stMetricLabel {{
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }}
-h1, h2, h3, h4, .display {{
-  font-family: 'Bricolage Grotesque', 'Inter', sans-serif !important;
-  color: {t['ink']} !important;
-  line-height: 1.15 !important;
-  letter-spacing: -.5px !important;
+h1, h2, h3, h4, h5 {{
+  font-family: 'Inter', system-ui, sans-serif !important;
+  color: var(--th-text) !important;
   font-weight: 700 !important;
+  letter-spacing: -.01em !important;
+  line-height: 1.25 !important;
 }}
-h1 {{ font-size: 1.9rem !important; letter-spacing: -.7px !important; margin-bottom: .2rem !important; }}
-h2 {{ font-size: 1.4rem !important; letter-spacing: -.4px !important; }}
-h3 {{ font-size: 1.05rem !important; letter-spacing: -.2px !important; line-height: 1.3 !important; }}
-code, kbd, pre, .mono {{
-  font-family: 'JetBrains Mono', monospace !important;
-}}
-a, a:visited {{ color: {t['primary']} !important; }}
+h1 {{ font-size: 1.55rem !important; }}
+h2 {{ font-size: 1.25rem !important; }}
+h3 {{ font-size: 1.02rem !important; }}
+code, kbd, pre, .mono {{ font-family: 'JetBrains Mono', ui-monospace, monospace !important; }}
+a, a:visited {{ color: {t['link']} !important; text-decoration: none; }}
+a:hover {{ text-decoration: underline; }}
 
-/* ---- Barre laterale : panneau releve noir, rouge = navigation active ----
-   Narrow deliberement (poste operateur, pas un site vitrine) : le panneau
-   THREAT CONTROL est en accordeon compact, pas besoin de large. ---- */
+/* st.subheader -> petit label de section discret */
+[data-testid="stHeadingWithActionElements"] h3 {{
+  font-size: .8rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase;
+  color: var(--th-text-muted) !important;
+  margin: .6rem 0 .4rem 0 !important;
+}}
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR — 3 zones : (1) identite + etat  (2) navigation
+                       (3) Threat Control (filtres)
+   ═══════════════════════════════════════════════════════════ */
 section[data-testid="stSidebar"] {{
-  background: {t['surface_bone']};
-  border-right: 1px solid {t['hairline']};
+  background: var(--th-surface-sunken);
+  border-right: 1px solid var(--th-border);
   min-width: 300px !important;
   max-width: 300px !important;
 }}
-section[data-testid="stSidebar"] > div {{ padding-top: .6rem; }}
+section[data-testid="stSidebar"] > div {{ padding-top: .55rem; }}
 section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
-  padding-left: 1.1rem; padding-right: 1.1rem;
+  padding-left: .9rem; padding-right: .9rem;
 }}
-section[data-testid="stSidebar"] * {{ color: {t['ink']}; }}
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {{ letter-spacing:-.5px !important; }}
-
-/* ---- Bloc logo + marque en tete de sidebar ---- */
-.th-brand-row {{
-  display: flex; align-items: center; gap: 10px; margin-bottom: .3rem;
-}}
-.th-logo-chip {{
-  display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 7px; flex-shrink: 0;
-  background: {t['ink']};
-  box-shadow: 0 0 0 1px {t['hairline']};
-}}
-.th-logo-chip img {{ width: 24px; height: 24px; display: block; }}
-.th-status-dot {{
-  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: {t['sev_low']}; margin-right: 6px; flex-shrink: 0;
-}}
-
-/* ---- Navigation laterale : boutons a icones (Material), pas d'emoji ----
-   Volontairement SIMPLE : pas de hack sur le <p> interne, pas de compteur
-   injecte en markdown-couleur (source de desalignement selon la longueur
-   du label / la police chargee ou non). Juste icone + texte, filet gauche
-   pour l'etat actif (type="primary" pilote depuis Python). */
-.st-key-main_nav {{ gap: 2px !important; }}
-.st-key-main_nav .stButton > button {{
-  font-family: 'Inter', sans-serif !important;
-  font-weight: 500;
-  font-size: .86rem;
-  text-transform: none;
-  letter-spacing: 0;
-  justify-content: flex-start;
-  gap: 10px;
-  background: transparent;
-  border: none;
-  border-left: 3px solid transparent;
-  border-radius: 4px !important;
-  padding: 8px 10px !important;
-  color: {t['charcoal']};
-  transition: background .12s ease, border-color .12s ease, color .12s ease;
-}}
-.st-key-main_nav .stButton > button:hover {{
-  background: rgba(255,255,255,0.045);
-  color: {t['ink']};
-  border-color: transparent;
-}}
-.st-key-main_nav .stButton > button[kind="primary"] {{
-  background: rgba(255,43,60,0.10) !important;
-  border-left-color: {t['primary']} !important;
-  color: {t['ink']} !important;
-  font-weight: 700;
-}}
-.st-key-main_nav .stButton > button[kind="primary"]:hover {{
-  background: rgba(255,43,60,0.15) !important;
-}}
-.st-key-main_nav .stButton > button span[data-testid="stIconMaterial"] {{
-  font-size: 1.05rem;
-  color: inherit;
-}}
-
-/* ---- Panneau de filtres : dense, groupe, premium ----------------------- */
-
-/* Resserre l'empilement vertical natif de la sidebar — UNE seule regle de
-   rythme vertical pour tout le panneau, plutot que des cas particuliers
-   par type de widget (source frequente de desalignement). */
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{
-  gap: .55rem;
-}}
+section[data-testid="stSidebar"] * {{ color: var(--th-text); }}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{ gap: .4rem; }}
 section[data-testid="stSidebar"] label {{
-  font-size: .78rem !important;
-  color: {t['charcoal']} !important;
+  font-size: .76rem !important; font-weight: 500 !important;
+  color: var(--th-text-muted) !important;
 }}
-section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {{
-  margin-top: -.3rem;
+section[data-testid="stSidebar"] hr {{ margin: .55rem 0; border-color: var(--th-border); }}
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {{ color: var(--th-text-faint); }}
+
+/* --- Separation des 3 zones (conteneurs keyed) --- */
+div[class*="st-key-sb_identity"],
+div[class*="st-key-sb_nav"] {{
+  padding-bottom: .55rem;
+  border-bottom: 1px solid var(--th-border);
+  margin-bottom: .3rem;
 }}
 
-/* Eyebrow "THREAT CONTROL" au-dessus des sections repliables */
-.th-filter-eyebrow {{
-  font-family: 'JetBrains Mono', monospace;
-  font-size: .7rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: .14em; color: {t['mute']};
-  white-space: nowrap;
-  display: flex; align-items: center; height: 2.4rem;
+/* Streamlit applique margin-bottom:-1rem aux conteneurs de markdown (pour
+   compenser la marge des <p>). Nos blocs HTML custom de la sidebar n'ont
+   pas de <p> final -> ce -1rem fait chevaucher les sous-blocs. On le
+   neutralise UNIQUEMENT pour nos composants custom (cible via :has). */
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(> .th-brand),
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(> .th-state-pill),
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(> .th-session),
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(> .th-nav-label),
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(> .th-filter-eyebrow),
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(> .th-filter-count) {{
+  margin-bottom: 0 !important;
 }}
 
-/* Bouton RESET FILTERS : compact et sur une seule ligne, meme dans une
-   colonne etroite (le style .stButton par defaut — majuscules, 10px 20px
-   de padding — est trop large pour la place disponible ici). */
-.st-key-btn_reset_filters .stButton > button {{
+/* --- Petits intitules de zone --- */
+.th-nav-label, .th-filter-eyebrow {{
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .64rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .16em; color: var(--th-text-faint);
+  padding: 2px 4px 4px 4px;
+}}
+.th-filter-eyebrow {{ display: flex; align-items: center; height: 2.1rem; }}
+
+/* ---------- ZONE 1 : identite + etat + session ----------
+   Trois sous-blocs qui doivent RESPIRER : bloc titre, pastille d'etat,
+   bloc identite. La cle "sb_identity" est posee DIRECTEMENT sur le
+   VerticalBlock (conteneur flex) -> on cible ce flex pour elargir le gap. */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"].st-key-sb_identity {{
+  gap: .7rem !important;
+}}
+
+.th-brand {{ display: flex; align-items: center; gap: 11px; padding: 4px 2px 4px 2px; }}
+.th-brand-logo {{
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--th-surface-2); border: 1px solid var(--th-border); border-radius: 9px;
+}}
+.th-brand-logo img {{ width: 26px; height: 26px; display: block; }}
+.th-brand-name {{ font-size: 1.04rem; font-weight: 700; letter-spacing: -.01em; color: var(--th-text); line-height: 1.15; }}
+.th-brand-sub {{ font-size: .7rem; font-weight: 500; color: var(--th-text-faint); margin-top: 3px; letter-spacing: .02em; }}
+
+/* Pastille d'etat unifiee (systeme / MongoDB). tone = ok | warn | crit */
+.th-state-pill {{
+  display: flex; align-items: center; gap: 9px;
+  font-size: .74rem; font-weight: 600; letter-spacing: .01em;
+  padding: 9px 11px; margin: 2px 2px 2px 2px;
+  border-radius: var(--th-radius-sm);
+  border: 1px solid var(--th-border);
+  border-left: 2px solid var(--th-text-faint);
+  background: var(--th-surface-2);
+  color: var(--th-text-soft);
+}}
+.th-state-pill .th-state-dot {{
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor;
+}}
+.th-state-ok   {{ color: var(--sev-low);  border-left-color: var(--sev-low);
+                  background: rgba(62,207,142,0.08); border-color: rgba(62,207,142,0.22); }}
+.th-state-warn {{ color: var(--sev-high); border-left-color: var(--sev-high);
+                  background: rgba(245,135,43,0.09); border-color: rgba(245,135,43,0.24); }}
+.th-state-crit {{ color: var(--th-accent); border-left-color: var(--th-accent);
+                  background: var(--th-accent-soft); border-color: rgba(224,30,43,0.30); }}
+.th-state-ok .th-state-dot {{ animation: th-breathe 3s ease-in-out infinite; }}
+.th-state-crit .th-state-dot, .th-state-warn .th-state-dot {{ animation: th-breathe 1.8s ease-in-out infinite; }}
+
+/* Identite de session : avatar + (nom / role) centres verticalement */
+.th-session {{
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 3px 2px 3px;
+  margin-top: 2px;
+}}
+.th-session-avatar {{
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--th-accent-soft); color: var(--th-accent);
+  font-size: .8rem; font-weight: 700; line-height: 1;
+}}
+.th-session-id {{ display: flex; flex-direction: column; justify-content: center; min-width: 0; }}
+.th-session-name {{
+  font-size: .82rem; font-weight: 600; color: var(--th-text); line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}}
+.th-session-role {{ font-size: .68rem; color: var(--th-text-faint); line-height: 1.2; margin-top: 1px; }}
+/* Bouton Sign out : detache du bloc identite */
+.st-key-th_logout_btn {{ margin-top: .15rem; }}
+.st-key-th_logout_btn .stButton > button {{
+  padding: 7px 10px !important; font-size: .76rem !important;
+  min-height: 0 !important; background: transparent;
+  border: 1px solid var(--th-border); color: var(--th-text-muted);
+}}
+.st-key-th_logout_btn .stButton > button:hover {{
+  background: var(--th-surface-2); color: var(--th-text); border-color: var(--th-text-faint);
+}}
+
+/* ---------- ZONE 2 : navigation ----------
+   Items alignes a GAUCHE (comme le reste de la sidebar), icones dans une
+   gouttiere de largeur fixe -> colonne verticale nette, labels au meme x.
+   Interligne resserre pour une lecture dense d'un coup d'oeil. La cle
+   "sb_nav" est posee DIRECTEMENT sur le VerticalBlock (conteneur flex). */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"].st-key-sb_nav {{
+  gap: 3px !important;
+}}
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button {{
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500; font-size: .88rem;
+  text-align: left !important;
+  justify-content: flex-start !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-left: 2px solid transparent !important;
+  border-radius: var(--th-radius-sm) !important;
   padding: 6px 10px !important;
-  font-size: .7rem !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-  white-space: nowrap !important;
-  width: 100%;
+  min-height: 0 !important;
+  color: var(--th-text-muted) !important;
+  transition: background .13s ease, color .13s ease, border-color .13s ease;
 }}
-.st-key-btn_reset_filters .stButton > button span[data-testid="stIconMaterial"] {{
-  font-size: .9rem;
+/* Streamlit enveloppe le contenu du bouton dans div>span en justify:center :
+   on les repasse a flex-start + pleine largeur pour un vrai alignement gauche. */
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button > div,
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button > div > span {{
+  justify-content: flex-start !important;
+  width: 100% !important;
+}}
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button * {{ color: inherit !important; }}
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button:hover {{
+  background: var(--th-surface-2) !important;
+  color: var(--th-text) !important;
+}}
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button[kind="primary"] {{
+  background: var(--th-accent-soft) !important;
+  border-left: 2px solid var(--th-accent) !important;
+  color: var(--th-text) !important;
+  font-weight: 600;
+}}
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button[kind="primary"] span[data-testid="stIconMaterial"] {{
+  color: var(--th-accent) !important; opacity: 1;
+}}
+/* Gouttiere d'icone : le conteneur direct de l'icone a une largeur FIXE
+   -> toutes les icones forment une colonne, les labels demarrent au meme x. */
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button > div > span > span:first-child {{
+  width: 1.35rem !important; min-width: 1.35rem !important;
+  margin-right: 8px !important; flex-shrink: 0 !important;
+  display: inline-flex !important; align-items: center; justify-content: center;
+}}
+section[data-testid="stSidebar"] div[class*="st-key-nav_"] .stButton > button span[data-testid="stIconMaterial"] {{
+  font-size: 1.05rem; opacity: .7;
 }}
 
-/* Sections repliables (st.expander) : cartes sombres compactes */
-section[data-testid="stSidebar"] [data-testid="stExpander"] {{
-  background: {t['surface_card']};
-  border: 1px solid {t['hairline']};
-  border-radius: 8px;
+/* ---------- ZONE 3 : Threat Control (accordeons homogenes) ---------- */
+.st-key-btn_reset_filters .stButton > button {{
+  padding: 5px 9px !important; font-size: .72rem !important; width: 100%;
+  white-space: nowrap !important; min-height: 0 !important;
+  background: transparent; border: 1px solid var(--th-border); color: var(--th-text-muted);
 }}
-section[data-testid="stSidebar"] [data-testid="stExpander"] summary {{
-  padding: 10px 12px !important;
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: .7rem !important;
-  font-weight: 700 !important;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: {t['charcoal']} !important;
-  min-height: 0 !important;
-  white-space: nowrap;
+.st-key-btn_reset_filters .stButton > button:hover {{
+  background: var(--th-surface-2); color: var(--th-text);
+}}
+.st-key-quick_search .stTextInput input {{ font-size: .8rem !important; }}
+
+section[data-testid="stSidebar"] [data-testid="stExpander"] {{
+  background: var(--th-surface);
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius-sm);
+  margin-bottom: 5px;
   overflow: hidden;
-  text-overflow: ellipsis;
+}}
+section[data-testid="stSidebar"] [data-testid="stExpander"] details {{ border: none !important; background: transparent !important; }}
+section[data-testid="stSidebar"] [data-testid="stExpander"] summary {{
+  padding: 9px 11px !important;
+  font-size: .74rem !important; font-weight: 600 !important;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--th-text-muted) !important;
+  min-height: 0 !important;
+  border-left: 2px solid transparent;
+  transition: color .12s ease, background .12s ease;
 }}
 section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{
-  color: {t['ink']} !important;
+  color: var(--th-text) !important; background: rgba(255,255,255,0.02);
 }}
+section[data-testid="stSidebar"] [data-testid="stExpander"] details[open] summary {{
+  color: var(--th-text) !important;
+  border-left: 2px solid var(--th-accent);
+  background: rgba(255,255,255,0.02);
+}}
+section[data-testid="stSidebar"] [data-testid="stExpander"] summary svg {{ color: var(--th-text-faint); }}
 section[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {{
-  padding: 4px 12px 12px 12px !important;
+  padding: 8px 11px 11px 11px !important;
+  border-top: 1px solid var(--th-border);
 }}
 
-/* Barre de recherche libre : toujours visible, en tete du panneau */
-.st-key-quick_search .stTextInput input {{
-  border-radius: 9999px !important;
-  font-family: 'JetBrains Mono', monospace !important;
+/* Pills (st.pills -> data-testid=stButtonGroup, boutons data-variant=pills) */
+section[data-testid="stSidebar"] [data-testid="stButtonGroup"] {{ gap: 5px; flex-wrap: wrap; }}
+section[data-testid="stSidebar"] [data-testid="stButtonGroup"] button[data-variant="pills"] {{
+  font-size: .72rem !important; font-weight: 600 !important;
+  padding: 4px 11px !important; border-radius: 999px !important;
+  background: transparent !important;
+  border: 1px solid var(--th-border) !important;
+  color: var(--th-text-faint) !important;
+}}
+section[data-testid="stSidebar"] [data-testid="stButtonGroup"] button[data-variant="pills"]:hover {{
+  color: var(--th-text) !important; border-color: var(--th-text-faint) !important;
+}}
+/* Severite : pilule selectionnee = fond neutre + teinte semantique par
+   position (ordre fixe CRITICAL / HIGH / MEDIUM / LOW). */
+.st-key-f_severity_pills button[data-variant="pills"][data-selected="true"] {{
+  background: var(--th-surface-2) !important;
+  border-color: var(--th-border-strong) !important;
+}}
+.st-key-f_severity_pills button[data-variant="pills"]:nth-of-type(1)[data-selected="true"] {{ color: var(--sev-critical) !important; box-shadow: inset 3px 0 0 var(--sev-critical); }}
+.st-key-f_severity_pills button[data-variant="pills"]:nth-of-type(2)[data-selected="true"] {{ color: var(--sev-high) !important; box-shadow: inset 3px 0 0 var(--sev-high); }}
+.st-key-f_severity_pills button[data-variant="pills"]:nth-of-type(3)[data-selected="true"] {{ color: var(--sev-medium) !important; box-shadow: inset 3px 0 0 var(--sev-medium); }}
+.st-key-f_severity_pills button[data-variant="pills"]:nth-of-type(4)[data-selected="true"] {{ color: var(--sev-low) !important; box-shadow: inset 3px 0 0 var(--sev-low); }}
+
+/* Pied de la zone filtres : compteur + actions */
+.th-filter-count {{
+  font-size: .74rem; color: var(--th-text-muted);
+  padding: 8px 4px 6px 4px;
+}}
+.th-filter-count strong {{ color: var(--th-text); font-weight: 700; }}
+.st-key-sb_filters .stDownloadButton > button,
+.st-key-sb_filters div[class*="st-key-btn_refresh"] .stButton > button {{
+  width: 100%; font-size: .78rem !important; padding: 7px 12px !important;
 }}
 
-/* Pastilles de severite : st.pills natif (theme-aware), pas un hack de
-   checkboxes — s'aligne toujours correctement, quelle que soit la police
-   chargee ou la largeur disponible. */
-section[data-testid="stSidebar"] [data-testid="stPills"] {{ gap: 5px; }}
-section[data-testid="stSidebar"] [data-testid="stPills"] button {{
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: .68rem !important;
-  padding: 4px 10px !important;
+/* ═══════════ PANNEAUX ═══════════ */
+div[class*="st-key-panel_"] {{
+  background: var(--th-surface);
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius);
+  padding: 16px 18px;
+}}
+div[class*="st-key-darkpanel_"] {{
+  background: var(--th-surface-sunken);
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius);
+  padding: 16px 18px;
+}}
+div[class*="st-key-darkpanel_"] * {{ color: var(--th-on-dark, {t['on_dark']}); }}
+div[class*="st-key-darkpanel_"] .th-panel-title .th-panel-sub {{ color: {t['on_dark_mute']}; }}
+
+.th-panel-title {{
+  font-size: .92rem; font-weight: 600; color: var(--th-text);
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .8rem;
+}}
+.th-panel-title .th-panel-sub {{
+  font-size: .74rem; font-weight: 400; color: var(--th-text-faint);
 }}
 
-/* ---- Metriques Streamlit natives ---- */
+/* ═══════════ METRIQUES NATIVES ═══════════ */
 [data-testid="stMetric"] {{
-  background: {t['surface_card']};
-  border: 1px solid {t['hairline']};
-  border-radius: 8px;
-  padding: 18px 20px;
+  background: var(--th-surface);
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius);
+  padding: 14px 16px;
 }}
 [data-testid="stMetricValue"] {{
-  font-family: 'Bricolage Grotesque', sans-serif !important;
-  font-size: 1.8rem !important;
-  font-weight: 700 !important;
-  letter-spacing: -.8px !important;
-  line-height: 1.0 !important;
-  color: {t['ink']} !important;
+  font-size: 1.7rem !important; font-weight: 700 !important; color: var(--th-text) !important;
 }}
 [data-testid="stMetricLabel"] {{
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: .74rem !important;
-  text-transform: uppercase;
-  letter-spacing: .1em !important;
-  color: {t['charcoal']} !important;
+  font-size: .78rem !important; color: var(--th-text-muted) !important;
 }}
-[data-testid="stMetricDelta"] {{ font-size: .85rem !important; }}
 
-/* ---- Boutons : console technique, pas des pilules commerce ---- */
-.stButton > button {{
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
-  font-size: .85rem;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  border-radius: 6px;
-  border: 1px solid {t['hairline_strong']};
-  background: {t['surface_card']};
-  color: {t['ink']};
-  padding: 10px 20px;
-  transition: transform .04s ease, background .15s ease, border-color .15s ease;
+/* ═══════════ BOUTONS ═══════════ */
+.stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {{
+  font-family: 'Inter', sans-serif;
+  font-weight: 600; font-size: .86rem;
+  border-radius: var(--th-radius-sm);
+  border: 1px solid var(--th-border-strong);
+  background: var(--th-surface-2);
+  color: var(--th-text);
+  padding: 9px 18px;
+  transition: background .14s ease, border-color .14s ease, transform .04s ease;
 }}
-.stButton > button:hover {{ background: {t['surface_bone']}; border-color: {t['primary']}; }}
+.stButton > button:hover, .stDownloadButton > button:hover, .stFormSubmitButton > button:hover {{
+  background: var(--th-surface);
+  border-color: var(--th-text-faint);
+}}
 .stButton > button:active {{ transform: translateY(1px); }}
-.stButton > button[kind="primary"] {{
-  background: {t['primary']};
-  border-color: {t['primary']};
-  color: #0a0a0d;
-  font-weight: 700;
+.stButton > button[kind="primary"], .stFormSubmitButton > button {{
+  background: var(--th-accent);
+  border-color: var(--th-accent);
+  color: {t['on_primary']};
 }}
-.stButton > button[kind="primary"]:hover {{ background: {t['primary_deep']}; border-color: {t['primary_deep']}; color: {t['ink']}; }}
-
-.stDownloadButton > button {{
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
-  font-size: .85rem;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  border-radius: 6px;
-  border: 1px solid {t['hairline_strong']};
-  background: {t['surface_card']};
-  color: {t['ink']};
+.stButton > button[kind="primary"] *, .stFormSubmitButton > button * {{ color: {t['on_primary']} !important; }}
+.stButton > button[kind="primary"]:hover, .stFormSubmitButton > button:hover {{
+  background: var(--th-accent-deep); border-color: var(--th-accent-deep);
 }}
-.stDownloadButton > button:hover {{ border-color: {t['primary']}; }}
 
-/* ---- Champs (inputs) : console de requete, monospace ---- */
+/* ═══════════ CHAMPS ═══════════ */
 .stTextInput input, .stSelectbox div[data-baseweb="select"] > div,
 .stDateInput input, .stNumberInput input, .stMultiSelect div[data-baseweb="select"] > div {{
-  font-family: 'JetBrains Mono', monospace !important;
-  border-radius: 6px !important;
-  border: 1px solid {t['hairline']} !important;
-  background: {t['surface_card']} !important;
-  color: {t['ink']} !important;
+  border-radius: var(--th-radius-sm) !important;
+  border: 1px solid var(--th-border) !important;
+  background: var(--th-surface-2) !important;
+  color: var(--th-text) !important;
 }}
-.stTextInput input:focus {{
-  border-color: {t['primary']} !important;
-  box-shadow: 0 0 0 3px rgba(255,43,60,0.18) !important;
+.stTextInput input:focus, .stNumberInput input:focus {{
+  border-color: var(--th-accent) !important;
+  box-shadow: 0 0 0 3px var(--th-ring, {t['ring_focus']}) !important;
 }}
+.stTextInput input::placeholder {{ color: {t['ash']} !important; }}
 
-/* ---- Onglets ---- */
-.stTabs [data-baseweb="tab-list"] {{ gap: 4px; border-bottom: 1px solid {t['hairline']}; }}
-.stTabs [data-baseweb="tab"] {{
-  font-family: 'JetBrains Mono', monospace; font-weight: 600;
-  color: {t['mute']}; background: transparent;
-}}
+/* ═══════════ ONGLETS ═══════════ */
+.stTabs [data-baseweb="tab-list"] {{ gap: 4px; border-bottom: 1px solid var(--th-border); }}
+.stTabs [data-baseweb="tab"] {{ font-weight: 500; color: var(--th-text-faint); background: transparent; }}
 .stTabs [aria-selected="true"] {{
-  color: {t['ink']} !important;
-  border-bottom: 2px solid {t['primary']} !important;
+  color: var(--th-text) !important;
+  border-bottom: 2px solid var(--th-accent) !important;
 }}
 
-/* ---- Tableaux / dataframes ---- */
+/* ═══════════ TABLEAUX ═══════════ */
 [data-testid="stDataFrame"], [data-testid="stTable"] {{
-  border: 1px solid {t['hairline']};
-  border-radius: 8px;
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius-sm);
   overflow: hidden;
 }}
-[data-testid="stDataFrame"] * {{ font-family: 'JetBrains Mono', 'Inter', monospace; }}
 
-/* ---- Expander ---- */
+/* ═══════════ EXPANDER (contenu principal) ═══════════ */
 .streamlit-expanderHeader, [data-testid="stExpander"] {{
-  background: {t['surface_bone']};
-  border: 1px solid {t['hairline']};
-  border-radius: 8px;
+  background: var(--th-surface);
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius-sm);
 }}
 
-/* ---- Alertes Streamlit ---- */
-.stAlert {{ border-radius: 8px; border: 1px solid {t['hairline']}; }}
+/* ═══════════ ALERTES STREAMLIT ═══════════ */
+.stAlert {{ border-radius: var(--th-radius-sm); border: 1px solid var(--th-border); }}
 
-/* ---- Barre superieure transparente ---- */
+/* ═══════════ HEADER / SCROLLBAR ═══════════ */
 header[data-testid="stHeader"] {{ background: transparent; }}
 #MainMenu, footer {{ visibility: hidden; }}
-
-/* ---- Scrollbar ---- */
 ::-webkit-scrollbar {{ width: 10px; height: 10px; }}
-::-webkit-scrollbar-thumb {{ background: {t['surface_bone']}; border-radius: 9999px; }}
+::-webkit-scrollbar-thumb {{ background: {t['stone']}; border-radius: 6px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {t['ash']}; }}
 ::-webkit-scrollbar-track {{ background: transparent; }}
 
-/* ---- Curseur clignotant façon terminal (en-tete) ---- */
-.th-cursor {{
-  display: inline-block; width: .5ch; margin-left: 2px;
-  background: {t['primary']}; animation: th-blink 1.1s steps(1) infinite;
-}}
-
-/* ---- Equerres de visee : coins type reticule sur les elements cles ---- */
-.th-bracket {{ position: relative; }}
-.th-bracket::before, .th-bracket::after {{
-  content: ""; position: absolute; width: 16px; height: 16px;
-  border-color: {t['primary']}; border-style: solid; opacity: .9; pointer-events: none;
-}}
-.th-bracket::before {{ top: -6px; left: -6px; border-width: 2px 0 0 2px; }}
-.th-bracket::after  {{ bottom: -6px; right: -6px; border-width: 0 2px 2px 0; }}
-
-/* ---- Variante equerres inset : pour une cellule a l'interieur d'un
-   bandeau contigu (kpi_strip), ou depasser vers l'exterieur chevaucherait
-   la cellule voisine ---- */
-.th-bracket-inset {{ position: relative; }}
-.th-bracket-inset::before, .th-bracket-inset::after {{
-  content: ""; position: absolute; width: 14px; height: 14px;
-  border-color: {t['primary']}; border-style: solid; opacity: .85; pointer-events: none;
-}}
-.th-bracket-inset::before {{ top: 10px; left: 10px; border-width: 2px 0 0 2px; }}
-.th-bracket-inset::after  {{ bottom: 10px; right: 10px; border-width: 0 2px 2px 0; }}
-
-/* ---- Point d'alerte pulsant ---- */
+/* ═══════════ COMPOSANTS ═══════════ */
 .th-live-dot {{
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: {t['primary']}; margin-right: 7px; animation: th-pulse 1.7s ease-in-out infinite;
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--th-accent); margin-right: 7px;
+  animation: th-breathe 2.4s ease-in-out infinite;
 }}
-
-/* ---- Tampon CRITICAL : cachet encreur pivote ---- */
-.th-stamp {{
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  font-size: .78rem;
-  text-transform: uppercase;
-  letter-spacing: .12em;
-  color: {t['primary']};
-  background: {t['stamp_tint']};
-  border: 2px solid {t['primary']};
-  border-radius: 4px;
-  padding: 5px 14px;
-  transform: rotate(-3deg);
-}}
-
-/* ---- Badge de severite : tag log-level entre crochets ---- */
 .th-sev-tag {{
-  font-family: 'JetBrains Mono', monospace;
-  font-size: .74rem;
-  font-weight: 700;
-  letter-spacing: .04em;
-  border-radius: 4px;
-  padding: 3px 9px;
+  font-size: .72rem; font-weight: 600; letter-spacing: .02em;
+  border-radius: 999px; padding: 2px 10px; display: inline-block;
+}}
+.th-stamp {{
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: .78rem; font-weight: 700; letter-spacing: .04em;
+  color: var(--th-accent);
+  background: var(--th-accent-soft);
+  border: 1px solid var(--th-accent);
+  border-radius: 999px;
+  padding: 4px 14px;
+}}
+.th-mono-chip {{
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .76rem;
+  background: var(--th-surface-2);
+  border: 1px solid var(--th-border);
+  border-radius: var(--th-radius-sm);
+  padding: 1px 8px;
+  color: var(--th-text);
   display: inline-block;
 }}
-.th-sev-critical {{ animation: th-pulse 1.7s ease-in-out infinite; }}
+.th-icon-badge {{
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: var(--th-radius-sm); flex-shrink: 0;
+}}
+.th-icon-badge .material-symbols-outlined {{ font-size: 1.2rem; }}
 
-/* ---- Puce mono pour IP/hash/MITRE en ligne ---- */
-.th-mono-chip {{
-  font-family: 'JetBrains Mono', monospace;
-  font-size: .78rem;
-  background: {t['surface_bone']};
-  border: 1px solid {t['hairline']};
-  border-radius: 4px;
-  padding: 2px 8px;
-  color: {t['ink']};
-  display: inline-block;
+/* ═══════════ ECRAN DE LOGIN ═══════════ */
+div[class*="st-key-th_login_box"] {{
+  background: var(--th-surface-2);
+  border: 1px solid var(--th-border-strong);
+  border-radius: 14px;
+  padding: 30px 30px 26px 30px;
+  margin-top: 8vh;
+  box-shadow: 0 30px 70px -24px rgba(0,0,0,0.6);
+}}
+div[class*="st-key-th_login_box"] .stTextInput input {{ background: var(--th-surface) !important; }}
+div[class*="st-key-th_login_box"] .stTextInput input {{ padding: 11px 13px; }}
+/* Masque l'indication "Press Enter to submit form" / "Press Enter to apply"
+   sous les champs de l'ecran de login. */
+div[class*="st-key-th_login_box"] [data-testid="InputInstructions"] {{ display: none !important; }}
+.th-login-head {{ display: flex; align-items: center; gap: 13px; margin-bottom: 4px; }}
+.th-login-mark {{
+  width: 42px; height: 42px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--th-surface-2); border: 1px solid var(--th-border);
+  border-radius: 10px;
+}}
+.th-login-mark img {{ width: 28px; height: 28px; display: block; }}
+.th-login-title {{ font-size: 1.2rem; font-weight: 700; color: var(--th-text); line-height: 1.1; }}
+.th-login-sub {{ font-size: .76rem; color: var(--th-text-faint); margin-top: 2px; }}
+.th-login-hint {{
+  font-size: .82rem; color: var(--th-text-muted);
+  margin: 14px 0 6px 0;
+  padding-top: 14px; border-top: 1px solid var(--th-border);
 }}
 </style>
 """
 
 
 def inject_theme() -> None:
-    """Injecte tout le theme SOC evidence-board. A appeler apres set_page_config."""
+    """Injecte tout le theme (un seul bloc CSS). A appeler apres set_page_config."""
     st.markdown(_css(), unsafe_allow_html=True)
+    st.markdown(
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+        'family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..40,400,0,0" />',
+        unsafe_allow_html=True)
 
 
 def _emit(html_block: str) -> None:
-    """Rend un bloc HTML via st.markdown(unsafe_allow_html=True), en retirant
-    les lignes vides internes. Sans ca, une ligne blanche au milieu d'un
-    template multi-lignes (typiquement un placeholder optionnel du genre
-    {label} qui se resout en chaine vide) fait sortir CommonMark du mode
-    'bloc HTML brut' — le reste du bloc est alors traite comme du Markdown
-    normal et, vu son indentation, rendu tel quel comme texte litteral au
-    lieu d'etre interprete comme du HTML."""
+    """Rend un bloc HTML via st.markdown en retirant les lignes vides internes
+    (sinon CommonMark sort du mode 'bloc HTML brut')."""
     st.markdown("\n".join(line for line in html_block.splitlines() if line.strip()),
                 unsafe_allow_html=True)
 
 
+def _hexpair(h: str, i: int) -> int:
+    return int(h[i:i + 2], 16)
+
+
+def _rgba(hexcolor: str, alpha: float) -> str:
+    h = hexcolor.lstrip("#")
+    if len(h) != 6:
+        return hexcolor
+    return f"rgba({_hexpair(h,0)},{_hexpair(h,2)},{_hexpair(h,4)},{alpha})"
+
+
 # ─────────────────────────────────────────────────────────────
-#  COMPOSANTS SIGNATURE
+#  COMPOSANTS
 # ─────────────────────────────────────────────────────────────
-def app_header(title: str = "ThreatHunter",
-               subtitle: str = "Plateforme de Threat Hunting reseau",
-               kicker: str = "SOC · Keystone Group",
-               logo_data_uri: str | None = None) -> None:
-    """En-tete console, compact (pas de titre XXL) : logo optionnel + eyebrow
-    prompt + titre + curseur clignotant + filet degrade fin."""
-    t = TOKENS
-    logo_html = (f'<div class="th-logo-chip" style="width:38px;height:38px;flex-shrink:0;">'
-                 f'<img src="{logo_data_uri}" style="width:26px;height:26px;"></div>'
-                 ) if logo_data_uri else ""
-    _emit(f"""
-    <div style="margin:.1rem 0 1.1rem 0;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        {logo_html}
-        <div>
-          <div style="font-family:'JetBrains Mono';font-size:.7rem;font-weight:600;
-                      text-transform:uppercase;letter-spacing:.14em;color:{t['primary']};">
-            &gt; {kicker}
-          </div>
-          <div style="font-family:'Bricolage Grotesque';font-weight:800;
-                      font-size:1.85rem;line-height:1.1;letter-spacing:-.7px;
-                      color:{t['ink']};">{title}<span class="th-cursor">&nbsp;</span></div>
-        </div>
-      </div>
-      <div style="font-family:'Inter';font-size:.9rem;color:{t['charcoal']};
-                  margin-top:.5rem;max-width:70ch;">{subtitle}</div>
-      <div style="height:1px;margin-top:.9rem;
-                  background:linear-gradient(90deg,{t['primary']},transparent 55%);"></div>
-    </div>
-    """)
+def panel_title(title: str, subtitle: str | None = None) -> None:
+    """Titre de panneau (dans un st.container(key='panel_xxx' / 'darkpanel_xxx'))."""
+    sub = f'<span class="th-panel-sub">{html.escape(str(subtitle))}</span>' if subtitle else ""
+    _emit(f'<div class="th-panel-title"><span>{html.escape(str(title))}</span>{sub}</div>')
+
+
+def sidebar_state_pill(label: str, tone: str = "ok") -> None:
+    """Pastille d'etat unifiee pour la barre laterale (statut systeme /
+    connexion MongoDB). tone ∈ {"ok" (vert), "warn" (orange), "crit" (rouge)}.
+    Meme composant pour tous les etats -> lecture coherente."""
+    tone = tone if tone in ("ok", "warn", "crit") else "ok"
+    _emit(
+        f'<div class="th-state-pill th-state-{tone}">'
+        f'<span class="th-state-dot"></span><span>{html.escape(str(label))}</span></div>')
 
 
 def severity_badge(severity: str) -> str:
-    """HTML d'un tag de severite façon log-level ([ CRITICAL ]). CRITICAL pulse en rouge plein."""
+    """Pilule de severite : fond tinte + texte de la couleur, filet discret."""
     t = TOKENS
     s = (severity or "").upper()
     color = {
         "CRITICAL": t["sev_critical"], "HIGH": t["sev_high"],
         "MEDIUM": t["sev_medium"], "LOW": t["sev_low"], "INFO": t["sev_info"],
     }.get(s, t["charcoal"])
-    if s == "CRITICAL":
-        return (f"<span class=\"th-sev-tag th-sev-critical\" style=\"background:{color};"
-                f"color:#0a0a0d;border:1px solid {color};\">[ {s} ]</span>")
-    return (f"<span class=\"th-sev-tag\" style=\"background:transparent;color:{color};"
-            f"border:1px solid {color};\">[ {s} ]</span>")
+    return (f'<span class="th-sev-tag" style="background:{_rgba(color, 0.14)};'
+            f'color:{color};border:1px solid {_rgba(color, 0.42)};">{s or "—"}</span>')
 
 
 def critical_stamp(text: str = "CRITICAL") -> str:
-    """HTML d'un tampon encreur pivote — reserve a l'alerte la plus grave d'une vue."""
-    return f"<span class=\"th-stamp\">&#9679; {html.escape(str(text))}</span>"
+    """Marqueur discret pour l'alerte la plus grave d'une vue."""
+    return f'<span class="th-stamp">&#9679; {html.escape(str(text))}</span>'
 
 
 def mono_chip(text: str) -> str:
-    """Puce JetBrains Mono discrete pour un IOC/IP/hash cite en ligne dans du texte.
-    Contenu echappe : donnees issues du trafic reseau, potentiellement forgees."""
-    return f"<span class=\"th-mono-chip\">{html.escape(str(text))}</span>"
+    """Puce monospace — RESERVEE aux IP / hash / IOC / identifiants MITRE."""
+    return f'<span class="th-mono-chip">{html.escape(str(text))}</span>'
+
+
+_ICON_TONES = {
+    "primary": ("rgba(255,255,255,0.05)", TOKENS["ink"]),
+    "danger":  (TOKENS["stamp_tint"], TOKENS["sev_critical"]),
+    "amber":   ("rgba(245,135,43,0.14)", TOKENS["sev_high"]),
+    "teal":    ("rgba(62,207,142,0.14)", TOKENS["sev_low"]),
+    "violet":  ("rgba(255,255,255,0.05)", TOKENS["charcoal"]),
+}
+
+
+def kpi_icon_card(icon: str, label: str, value, tone: str = "primary",
+                  delta: str | None = None) -> None:
+    """Carte KPI epuree avec pastille d'icone. tone='danger' = seul KPI qui
+    porte l'accent (a reserver a Critical)."""
+    t = TOKENS
+    bg, fg = _ICON_TONES.get(tone, _ICON_TONES["primary"])
+    accent = tone == "danger"
+    delta_html = (f'<div style="font-size:.76rem;color:{t["charcoal"]};margin-top:.15rem;">'
+                  f'{html.escape(str(delta))}</div>') if delta else ""
+    border = _rgba(t["primary"], 0.45) if accent else t["hairline"]
+    _emit(f"""
+    <div style="background:{t['surface_card']};border:1px solid {border};
+                border-radius:10px;padding:15px 16px;height:100%;
+                display:flex;align-items:center;gap:13px;">
+      <div class="th-icon-badge" style="background:{bg};color:{fg};">
+        <span class="material-symbols-outlined">{icon}</span>
+      </div>
+      <div>
+        <div style="font-size:1.7rem;font-weight:700;line-height:1;color:{t['ink']};">{value}</div>
+        <div style="font-size:.78rem;color:{t['charcoal']};margin-top:.25rem;">{html.escape(str(label))}</div>
+        {delta_html}
+      </div>
+    </div>
+    """)
 
 
 def kpi_card(label: str, value, delta: str | None = None,
              accent: bool = False) -> None:
-    """Carte KPI console. accent=True = LE chiffre le plus critique de la vue :
-    lueur rouge, point pulsant, equerres de visee — reserve a UN SEUL par ecran."""
+    """Carte KPI simple. accent=True = signal critique (accent) — un seul par vue."""
     t = TOKENS
-    if accent:
-        border = t["hairline_strong"]
-        value_style = f"color:{t['primary']};text-shadow:0 0 18px {t['primary_glow']};"
-        dot = "<span class=\"th-live-dot\"></span>"
-        bracket_class = " th-bracket"
-    else:
-        border = t["hairline"]
-        value_style = f"color:{t['ink']};"
-        dot = ""
-        bracket_class = ""
-    delta_html = (f"<div style=\"font-family:'JetBrains Mono';font-size:.8rem;"
-                  f"color:{t['charcoal']};margin-top:.4rem;\">{html.escape(str(delta))}</div>") if delta else ""
+    border = _rgba(t["primary"], 0.45) if accent else t["hairline"]
+    value_color = t["primary"] if accent else t["ink"]
+    dot = '<span class="th-live-dot"></span>' if accent else ""
+    delta_html = (f'<div style="font-size:.78rem;color:{t["charcoal"]};margin-top:.4rem;">'
+                  f'{html.escape(str(delta))}</div>') if delta else ""
     _emit(f"""
-    <div class="{bracket_class.strip()}" style="background:{t['surface_card']};border:1px solid {border};
-                border-radius:6px;padding:14px 16px;height:100%;">
-      <div style="font-family:'JetBrains Mono';font-size:.68rem;font-weight:600;
-                  text-transform:uppercase;letter-spacing:.09em;color:{t['charcoal']};">{dot}{html.escape(str(label))}</div>
-      <div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:1.9rem;
-                  line-height:1.1;letter-spacing:-1px;margin-top:.3rem;{value_style}">{value}</div>
+    <div style="background:{t['surface_card']};border:1px solid {border};
+                border-radius:10px;padding:15px 16px;height:100%;">
+      <div style="font-size:.78rem;font-weight:500;color:{t['charcoal']};">{dot}{html.escape(str(label))}</div>
+      <div style="font-size:1.9rem;font-weight:700;line-height:1.15;margin-top:.3rem;color:{value_color};">{value}</div>
       {delta_html}
     </div>
     """)
 
 
 def kpi_strip(items: list[dict]) -> None:
-    """Bandeau de stats unifie : UNE bordure, cellules egales separees par
-    des filets internes — plutot que des cartes flottantes independantes,
-    dont les hauteurs/largeurs divergent des que les labels different
-    (repli sur 2 lignes, cellule elargie qui casse la grille). A utiliser
-    des qu'on affiche plusieurs KPI cote a cote.
-
-    items: liste de {"label": str, "value": ..., "delta": str optionnel,
-    "accent": bool optionnel — reserve a UNE SEULE cellule du bandeau}."""
+    """Bandeau de stats unifie : une bordure, cellules egales separees par des
+    filets internes. items: {"label", "value", "delta"?, "accent"?}."""
     t = TOKENS
     n = len(items)
     cells = []
     for i, item in enumerate(items):
         accent = item.get("accent", False)
         border_right = f"border-right:1px solid {t['hairline']};" if i < n - 1 else ""
-        if accent:
-            value_style = f"color:{t['primary']};text-shadow:0 0 18px {t['primary_glow']};"
-            dot = "<span class=\"th-live-dot\"></span>"
-            bg = f"background:{t['stamp_tint']};"
-            bracket = "th-bracket-inset"
-        else:
-            value_style = f"color:{t['ink']};"
-            dot = ""
-            bg = ""
-            bracket = ""
-        delta_html = (f"<div style=\"font-family:'JetBrains Mono';font-size:.72rem;"
-                      f"color:{t['charcoal']};margin-top:.3rem;white-space:nowrap;"
-                      f"overflow:hidden;text-overflow:ellipsis;\">{html.escape(str(item['delta']))}</div>"
-                      ) if item.get("delta") else ""
+        value_color = t["primary"] if accent else t["ink"]
+        dot = '<span class="th-live-dot"></span>' if accent else ""
+        delta_html = (f'<div style="font-size:.72rem;color:{t["charcoal"]};margin-top:.3rem;'
+                      f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+                      f'{html.escape(str(item["delta"]))}</div>') if item.get("delta") else ""
         cells.append(f"""
-        <div class="{bracket}" style="flex:1;min-width:0;{border_right}{bg}padding:13px 16px;position:relative;">
-          <div style="font-family:'JetBrains Mono';font-size:.66rem;font-weight:600;
-                      text-transform:uppercase;letter-spacing:.07em;color:{t['charcoal']};
+        <div style="flex:1;min-width:0;{border_right}padding:13px 16px;">
+          <div style="font-size:.72rem;font-weight:500;color:{t['charcoal']};
                       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{dot}{html.escape(str(item['label']))}</div>
-          <div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:1.6rem;
-                      line-height:1.2;letter-spacing:-.8px;margin-top:.25rem;{value_style}">{item['value']}</div>
+          <div style="font-size:1.55rem;font-weight:700;line-height:1.2;margin-top:.2rem;color:{value_color};">{item['value']}</div>
           {delta_html}
         </div>
         """)
     _emit(
-        f'<div style="display:flex;border:1px solid {t["hairline"]};border-radius:6px;'
+        f'<div style="display:flex;border:1px solid {t["hairline"]};border-radius:10px;'
         f'overflow:hidden;background:{t["surface_card"]};">' + "".join(cells) + "</div>")
 
 
 def code_well(content: str, label: str | None = None) -> None:
-    """Well noir pur façon 'log brut imprime' pour IOC, IP, hashs, logs Zeek —
-    bandeau rouge en tete, comme une etiquette de piece a conviction.
-    Contenu echappe avant injection HTML (donnees issues du trafic reseau,
-    potentiellement forgees par l'attaquant qu'on analyse)."""
+    """Bloc technique brut (IOC, IP, hash, logs). Contenu echappe (donnees
+    issues du trafic reseau, potentiellement forgees)."""
     t = TOKENS
-    lab = (f"<div style=\"font-family:'JetBrains Mono';font-size:.7rem;"
-           f"color:{t['primary']};text-transform:uppercase;letter-spacing:.12em;"
-           f"margin-bottom:.6rem;\">{html.escape(str(label))}</div>") if label else ""
+    lab = (f'<div style="font-size:.7rem;font-weight:600;color:{t["mute"]};'
+           f'text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem;">'
+           f'{html.escape(str(label))}</div>') if label else ""
     safe_content = html.escape(str(content))
     _emit(f"""
-    <div style="background:{t['surface_dark']};border-radius:6px;border-top:2px solid {t['primary']};
-                padding:18px 22px;">
+    <div style="background:{t['surface_dark']};border:1px solid {t['hairline']};
+                border-left:2px solid {t['hairline_strong']};border-radius:8px;padding:14px 16px;">
       {lab}
-      <pre style="font-family:'JetBrains Mono';font-size:.82rem;color:{t['on_dark']};
-                  margin:0;white-space:pre-wrap;word-break:break-word;">{safe_content}</pre>
+      <pre style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.8rem;
+                  color:{t['on_dark']};margin:0;white-space:pre-wrap;word-break:break-word;">{safe_content}</pre>
     </div>
     """)
 
 
 def report_block(text: str, label: str | None = None) -> None:
-    """Bloc de prose façon rapport d'incident (pas un well technique) : filet
-    rouge a gauche, typographie Inter normale — pour un paragraphe narratif
-    (executive summary), distinct des donnees brutes de code_well."""
+    """Bloc de prose façon rapport d'incident : filet d'accent a gauche."""
     t = TOKENS
-    lab = (f"<div style=\"font-family:'JetBrains Mono';font-size:.68rem;font-weight:600;"
-           f"color:{t['primary']};text-transform:uppercase;letter-spacing:.12em;"
-           f"margin-bottom:.5rem;\">{html.escape(str(label))}</div>") if label else ""
+    lab = (f'<div style="font-size:.7rem;font-weight:600;color:{t["primary"]};'
+           f'text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem;">'
+           f'{html.escape(str(label))}</div>') if label else ""
     safe_text = html.escape(str(text))
     _emit(f"""
-    <div style="background:{t['surface_card']};border-left:3px solid {t['primary']};
-                border-radius:0 6px 6px 0;padding:16px 20px;">
+    <div style="background:{t['surface_card']};border:1px solid {t['hairline']};
+                border-left:3px solid {t['primary']};border-radius:8px;padding:16px 18px;">
       {lab}
-      <div style="font-family:'Inter';font-size:.92rem;line-height:1.6;color:{t['body']};">{safe_text}</div>
+      <div style="font-size:.92rem;line-height:1.65;color:{t['body']};">{safe_text}</div>
     </div>
     """)
 
 
 def section_header(title: str, eyebrow: str | None = None, accent: bool = False) -> None:
-    """Titre de section : eyebrow façon prompt terminal (chevron rouge) + filet degrade."""
+    """Titre de page : petit sur-titre discret + titre en Inter, casse normale."""
     t = TOKENS
-    eb = (f"<div style=\"font-family:'JetBrains Mono';font-size:.75rem;font-weight:600;"
-          f"text-transform:uppercase;letter-spacing:.1em;color:{t['charcoal']};"
-          f"margin-bottom:.3rem;\"><span style=\"color:{t['primary']};\">&gt;</span> {html.escape(str(eyebrow))}</div>"
-          ) if eyebrow else ""
+    color = t["primary"] if accent else t["mute"]
+    eb = (f'<div style="font-size:.72rem;font-weight:600;text-transform:uppercase;'
+          f'letter-spacing:.12em;color:{color};margin-bottom:.35rem;">'
+          f'{html.escape(str(eyebrow))}</div>') if eyebrow else ""
     _emit(f"""
-    <div style="margin:.1rem 0 .7rem 0;">
+    <div style="margin:.1rem 0 1rem 0;">
       {eb}
-      <div style="font-family:'Bricolage Grotesque';font-weight:700;font-size:1.25rem;
-                  letter-spacing:-.4px;line-height:1.2;color:{t['ink']};">{html.escape(str(title))}</div>
-      <div style="height:1px;margin-top:.5rem;
-                  background:linear-gradient(90deg,{t['primary']},transparent 45%);"></div>
+      <div style="font-size:1.7rem;font-weight:700;line-height:1.15;letter-spacing:-.01em;
+                  color:{t['ink']};">{html.escape(str(title))}</div>
     </div>
     """)
 
 
 def perforated_divider() -> None:
-    """Filet pointille discret entre deux blocs d'une meme section."""
+    """Filet discret entre deux blocs."""
     t = TOKENS
     st.markdown(
-        f"<div style=\"height:0;border-top:1px dashed {t['hairline']};margin:.9rem 0;\"></div>",
+        f'<div style="height:0;border-top:1px solid {t["hairline"]};margin:1rem 0;"></div>',
         unsafe_allow_html=True)
 
 
-def empty_state(message: str, hint: str | None = None) -> None:
-    """Panneau 'aucun signal' — a utiliser à la place d'un st.info generique
-    partout ou un graphique/tableau n'a rien a montrer (evite aussi les
-    graphes Plotly casses sur des jeux de donnees entierement vides)."""
+_EMPTY_SVG = (
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" '
+    'xmlns="http://www.w3.org/2000/svg" style="display:block;">'
+    '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" '
+    'stroke-dasharray="3 3.2" opacity="0.9"/>'
+    '<path d="M8.5 12h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
+    '</svg>')
+
+
+def empty_state(message: str, hint: str | None = None, on_dark: bool = False) -> None:
+    """Etat vide elegant : marqueur discret + phrase courte + hint optionnel.
+    (icone en SVG inline — aucune dependance de police)."""
     t = TOKENS
-    hint_html = (f"<div style=\"font-family:'Inter';font-size:.82rem;color:{t['ash']};"
-                 f"margin-top:.4rem;\">{html.escape(str(hint))}</div>") if hint else ""
+    border = t["divider_dark"] if on_dark else t["hairline"]
+    fg = t["on_dark_mute"] if on_dark else t["charcoal"]
+    hint_fg = t["on_dark_mute"] if on_dark else t["mute"]
+    badge_bg = "rgba(255,255,255,0.05)" if on_dark else t["surface_raised"]
+    hint_html = (f'<div style="font-size:.8rem;color:{hint_fg};margin-top:.35rem;">'
+                 f'{html.escape(str(hint))}</div>') if hint else ""
     _emit(f"""
-    <div style="border:1px dashed {t['hairline_strong']};border-radius:8px;
-                padding:26px 22px;text-align:center;background:rgba(255,255,255,0.015);">
-      <div style="font-family:'JetBrains Mono';font-size:.78rem;font-weight:600;
-                  text-transform:uppercase;letter-spacing:.14em;color:{t['mute']};">
-        &#9711; NO SIGNAL — {html.escape(str(message))}
-      </div>
+    <div style="border:1px dashed {border};border-radius:10px;
+                padding:28px 22px;text-align:center;">
+      <div style="width:38px;height:38px;border-radius:9px;margin:0 auto .7rem auto;
+                  display:flex;align-items:center;justify-content:center;
+                  background:{badge_bg};color:{fg};">{_EMPTY_SVG}</div>
+      <div style="font-size:.9rem;font-weight:500;color:{fg};">{html.escape(str(message))}</div>
       {hint_html}
     </div>
     """)
 
 
 def status_row(label: str, online: bool = True, detail: str | None = None) -> None:
-    """Ligne de statut de service — point fixe (vert=up, rouge=down), pas de pulse
-    (le pulse est reserve aux alertes vivantes, pas au statut d'infra)."""
+    """Ligne de statut de service — point + libelle + etat."""
     t = TOKENS
-    color = t["sev_low"] if online else t["primary"]
-    detail_html = (f"<span style=\"color:{t['charcoal']};font-family:'JetBrains Mono';"
-                   f"font-size:.78rem;margin-left:8px;\">{html.escape(str(detail))}</span>") if detail else ""
+    color = t["badge_success"] if online else t["primary"]
+    state = "Online" if online else "Offline"
+    detail_html = (f'<span style="color:{t["charcoal"]};font-size:.8rem;margin-left:8px;">'
+                   f'{html.escape(str(detail))}</span>') if detail else ""
     _emit(f"""
-    <div style="display:flex;align-items:center;padding:6px 0;">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
-                   background:{color};margin-right:10px;flex-shrink:0;"></span>
-      <span style="font-family:'Inter';font-size:.92rem;color:{t['ink']};">{html.escape(str(label))}</span>
+    <div style="display:flex;align-items:center;padding:9px 13px;background:{t['surface_card']};
+                border:1px solid {t['hairline']};border-radius:8px;margin-bottom:6px;">
+      <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                   background:{color};margin-right:11px;flex-shrink:0;"></span>
+      <span style="font-size:.88rem;font-weight:500;color:{t['ink']};">{html.escape(str(label))}</span>
+      <span style="font-size:.72rem;font-weight:600;color:{color};margin-left:10px;">{state}</span>
       {detail_html}
     </div>
     """)
 
 
-def ranked_list(items: list[tuple[str, int]], mono: bool = True, max_bar: int | None = None) -> None:
+def ranked_list(items: list[tuple[str, int]], mono: bool = True, max_bar: int | None = None,
+                on_dark: bool = False) -> None:
     """Liste classee compacte (Top MITRE, Top IOCs...) : rang, libelle, barre
-    de proportion fine, valeur — plus dense qu'un graphique pour un TOP N."""
+    fine, valeur."""
     t = TOKENS
     if not items:
-        empty_state("aucune donnee")
+        empty_state("Nothing to rank yet", on_dark=on_dark)
         return
+    fg = t["on_dark"] if on_dark else t["ink"]
+    sub = t["on_dark_mute"] if on_dark else t["charcoal"]
+    track = "rgba(255,255,255,0.07)"
+    bar = _rgba(t["primary"], 0.85)
     peak = max(v for _, v in items) or 1
     rows = []
-    font = "'JetBrains Mono', monospace" if mono else "'Inter', sans-serif"
+    font = "'JetBrains Mono', ui-monospace, monospace" if mono else "'Inter', sans-serif"
     for i, (label, value) in enumerate(items):
-        pct = max(6, round(100 * value / peak))
+        pct = max(5, round(100 * value / peak))
         rows.append(f"""
         <div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
-          <span style="font-family:'JetBrains Mono';font-size:.72rem;color:{t['ash']};width:1.4em;flex-shrink:0;">{i + 1:02d}</span>
-          <span style="font-family:{font};font-size:.82rem;color:{t['ink']};flex-shrink:0;
-                       max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{html.escape(str(label))}</span>
-          <span style="flex:1;height:5px;background:{t['surface_bone']};border-radius:3px;overflow:hidden;">
-            <span style="display:block;height:100%;width:{pct}%;background:{t['primary']};border-radius:3px;"></span>
+          <span style="font-size:.72rem;color:{sub};width:1.5em;flex-shrink:0;">{i + 1:02d}</span>
+          <span style="font-family:{font};font-size:.8rem;color:{fg};flex-shrink:0;
+                       max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{html.escape(str(label))}</span>
+          <span style="flex:1;height:4px;background:{track};border-radius:3px;overflow:hidden;">
+            <span style="display:block;height:100%;width:{pct}%;background:{bar};border-radius:3px;"></span>
           </span>
-          <span style="font-family:'JetBrains Mono';font-size:.76rem;color:{t['charcoal']};width:2.4em;text-align:right;flex-shrink:0;">{value}</span>
+          <span style="font-size:.76rem;color:{sub};width:2.4em;text-align:right;flex-shrink:0;">{value}</span>
         </div>
         """)
     _emit("".join(rows))
 
 
 def threat_level_banner(level: str, detail: str = "") -> None:
-    """Bandeau pleine largeur façon panneau DEFCON — lit le niveau de menace
-    d'un seul coup d'oeil. level in {"CRITICAL","ELEVATED","NOMINAL"}."""
+    """Bandeau : niveau de menace d'un coup d'oeil.
+    level in {"CRITICAL","ELEVATED","NOMINAL"}."""
     t = TOKENS
     cfg = {
-        "CRITICAL": (t["primary"], "rgba(255,43,60,0.12)", True),
-        "ELEVATED": (t["sev_high"], "rgba(255,176,32,0.10)", False),
-        "NOMINAL":  (t["sev_low"], "rgba(35,209,139,0.08)", False),
-    }.get(level, (t["mute"], "rgba(255,255,255,0.04)", False))
-    color, bg, pulse = cfg
-    dot_class = "th-live-dot" if pulse else ""
-    dot_style = "" if pulse else f"background:{color};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:10px;"
+        "CRITICAL": (t["sev_critical"], True),
+        "ELEVATED": (t["sev_high"], False),
+        "NOMINAL":  (t["badge_success"], False),
+    }.get(level, (t["mute"], False))
+    color, pulse = cfg
+    dot = ('<span class="th-live-dot"></span>' if pulse else
+           f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+           f'background:{color};margin-right:10px;"></span>')
     _emit(f"""
     <div style="display:flex;align-items:center;justify-content:space-between;
-                border:1px solid {color};background:{bg};border-radius:8px;
-                padding:14px 20px;margin:1.2rem 0 .4rem 0;">
+                border:1px solid {_rgba(color, 0.35)};border-left:3px solid {color};
+                background:{_rgba(color, 0.07)};border-radius:8px;
+                padding:13px 18px;margin:.4rem 0;">
       <div style="display:flex;align-items:center;">
-        <span class="{dot_class}" style="{dot_style}"></span>
-        <span style="font-family:'JetBrains Mono';font-weight:700;font-size:.95rem;
-                     letter-spacing:.08em;color:{color};">THREAT LEVEL: {html.escape(level)}</span>
+        {dot}
+        <span style="font-weight:700;font-size:.92rem;color:{color};">Threat level: {html.escape(level.title())}</span>
       </div>
-      <span style="font-family:'JetBrains Mono';font-size:.8rem;color:{t['charcoal']};">{html.escape(detail)}</span>
+      <span style="font-size:.8rem;color:{t['charcoal']};">{html.escape(detail)}</span>
     </div>
     """)
 
 
-# Palette Plotly assortie (fond transparent -> laisse voir le canvas noir)
+# ─────────────────────────────────────────────────────────────
+#  PLOTLY — habillage sombre unifie
+# ─────────────────────────────────────────────────────────────
+# Series generiques : gris neutres. L'accent et les couleurs de severite
+# n'arrivent que via color_discrete_map explicite.
 PLOTLY_COLORWAY = [
-    TOKENS["primary"], TOKENS["sev_high"], TOKENS["sev_low"],
-    TOKENS["hero_pink"], TOKENS["sev_medium"], TOKENS["mute"],
-    TOKENS["primary_deep"], TOKENS["on_dark"],
+    "#c2c8d2", TOKENS["sev_high"], TOKENS["sev_low"],
+    "#8b93a1", TOKENS["sev_medium"], "#5c6472",
+    "#a4abb7", TOKENS["stone"],
 ]
 
+
 def plotly_layout() -> dict:
-    """Layout Plotly assorti au theme sombre (fond transparent, filets clairs discrets,
-    infobulles façon well noir cerne de rouge)."""
+    """Layout Plotly sombre (fond transparent, grille discrete, hover sombre)."""
     t = TOKENS
     return dict(
         colorway=PLOTLY_COLORWAY,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color=t["ink"], size=13),
-        title=dict(text="", font=dict(family="Bricolage Grotesque, sans-serif", size=18)),
-        xaxis=dict(gridcolor=t["hairline"], zerolinecolor=t["hairline"]),
-        yaxis=dict(gridcolor=t["hairline"], zerolinecolor=t["hairline"]),
-        margin=dict(l=10, r=10, t=40, b=10),
+        font=dict(family="Inter, sans-serif", color=t["body"], size=12),
+        title=dict(text="", font=dict(family="Inter, sans-serif", size=15)),
+        xaxis=dict(gridcolor=t["hairline"], zerolinecolor=t["hairline"], linecolor=t["hairline"]),
+        yaxis=dict(gridcolor=t["hairline"], zerolinecolor=t["hairline"], linecolor=t["hairline"]),
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(font=dict(color=t["charcoal"], size=10)),
         hoverlabel=dict(
-            bgcolor=t["surface_dark"],
-            bordercolor=t["primary"],
-            font=dict(family="JetBrains Mono, monospace", color=t["on_dark"], size=12),
+            bgcolor=t["surface_deep"],
+            bordercolor=t["hairline_strong"],
+            font=dict(family="Inter, sans-serif", color=t["on_dark"], size=11),
         ),
     )
+
+
+def plotly_layout_dark() -> dict:
+    """Variante pour un graphique DANS un darkpanel_ (fond plus sombre)."""
+    t = TOKENS
+    layout = plotly_layout()
+    layout.update(
+        font=dict(family="Inter, sans-serif", color=t["on_dark"], size=12),
+        xaxis=dict(gridcolor=t["divider_dark"], zerolinecolor=t["divider_dark"]),
+        yaxis=dict(gridcolor=t["divider_dark"], zerolinecolor=t["divider_dark"]),
+    )
+    return layout
