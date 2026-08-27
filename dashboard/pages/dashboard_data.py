@@ -12,10 +12,10 @@ SEV_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
 # Alignes sur dashboard.pages.theme.TOKENS (sev_*) — copies en dur plutot
 # qu'importes pour garder ce module utilisable sans streamlit (PDF/CSV).
 SEV_COLORS = {
-    "CRITICAL": "#ff2b3c",   # sev_critical / primary — rouge Keystone
-    "HIGH":     "#ffb020",   # sev_high
-    "MEDIUM":   "#d1a300",   # sev_medium
-    "LOW":      "#23d18b",   # sev_low
+    "CRITICAL": "#e01e2b",   # sev_critical — rouge Keystone / menace
+    "HIGH":     "#ff7a1a",   # sev_high — orange / risque eleve
+    "MEDIUM":   "#f5c518",   # sev_medium — jaune / moyen
+    "LOW":      "#2ecc71",   # sev_low — vert / operationnel
 }
 PLOTLY_TEMPLATE = None  # habillage complet applique via theme.plotly_layout()
 
