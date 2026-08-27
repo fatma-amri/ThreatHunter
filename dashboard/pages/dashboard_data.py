@@ -9,13 +9,15 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 SEV_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+# Alignes sur dashboard.pages.theme.TOKENS (sev_*) — copies en dur plutot
+# qu'importes pour garder ce module utilisable sans streamlit (PDF/CSV).
 SEV_COLORS = {
-    "CRITICAL": "#b91c1c",
-    "HIGH":     "#ea580c",
-    "MEDIUM":   "#ca8a04",
-    "LOW":      "#2563eb",
+    "CRITICAL": "#ff2b3c",   # sev_critical / primary — rouge Keystone
+    "HIGH":     "#ffb020",   # sev_high
+    "MEDIUM":   "#d1a300",   # sev_medium
+    "LOW":      "#23d18b",   # sev_low
 }
-PLOTLY_TEMPLATE = "plotly_white"
+PLOTLY_TEMPLATE = None  # habillage complet applique via theme.plotly_layout()
 
 
 def to_dataframe(alerts: List[dict]) -> pd.DataFrame:
