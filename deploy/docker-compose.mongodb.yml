@@ -1,0 +1,28 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: th-mongo
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: thunter
+      MONGO_INITDB_ROOT_PASSWORD: ThreatHunt@2024!
+      MONGO_INITDB_DATABASE: threathunter
+    volumes:
+      - th-mongo-data:/data/db
+      - th-mongo-config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  th-mongo-data:
+  th-mongo-config:

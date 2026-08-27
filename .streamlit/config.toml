@@ -1,0 +1,31 @@
+# Theme natif Streamlit — SOC evidence-board (Keystone Group : rouge/noir).
+# Complete dashboard/pages/theme.py, qui gere polices, equerres, tampon, etc.
+# via CSS injectee. Ce fichier aligne les widgets NATIFS (dataframe, inputs,
+# sliders, boutons) qui ne sont pas atteignables par CSS seule.
+#
+# primaryColor est VOLONTAIREMENT neutre (pas rouge) : c'est la couleur que
+# Streamlit applique a TOUS les widgets actifs (slider, toggle, checkbox,
+# focus ring), sans distinction. Le rouge Keystone reste reserve aux etats
+# reellement critiques (badge CRITICAL, tampon, KPI accent, nav active) via
+# du CSS cible dans dashboard/pages/theme.py — pas via ce reglage global.
+[theme]
+base = "dark"
+primaryColor = "#9a9aa2"
+backgroundColor = "#0a0a0d"
+secondaryBackgroundColor = "#141417"
+textColor = "#f2f1ec"
+borderColor = "rgba(255,255,255,0.14)"
+linkColor = "#ff2b3c"
+redColor = "#ff2b3c"
+font = "Inter, sans-serif"
+headingFont = "Bricolage Grotesque, sans-serif"
+codeFont = "JetBrains Mono, monospace"
+baseRadius = "small"
+buttonRadius = "small"
+dataframeBorderColor = "rgba(255,255,255,0.14)"
+dataframeHeaderBackgroundColor = "#1c1c21"
+showWidgetBorder = true
+showSidebarBorder = true
+
+[browser]
+gatherUsageStats = false
