@@ -39,6 +39,30 @@ from detectors.slow_scan import SlowScanDetector
 from detectors.stealth_scan import StealthScanDetector
 from detectors.dns_tunnel import DNSTunnelDetector
 from detectors.exfiltration import ExfiltrationDetector
+from detectors.brute_force_services import (
+    FtpBruteForceDetector, RdpBruteForceDetector, SmbBruteForceDetector,
+    TelnetBruteForceDetector, VncBruteForceDetector, DbBruteForceDetector,
+)
+from detectors.beaconing_channels import (
+    HttpBeaconingDetector, HttpsBeaconingDetector, DnsBeaconingDetector,
+    LongSleepBeaconingDetector, JitteredBeaconingDetector, NonStdPortBeaconingDetector,
+)
+from detectors.exfiltration_channels import (
+    FtpExfiltrationDetector, HttpExfiltrationDetector, HttpsExfiltrationDetector,
+    SmtpExfiltrationDetector, DnsExfiltrationDetector, NonStdPortExfiltrationDetector,
+)
+from detectors.tunneling_channels import (
+    IcmpTunnelDetector, SshTunnelDetector, HttpTunnelDetector, HttpsTunnelDetector,
+    IodineDnsTunnelDetector, Dnscat2TunnelDetector,
+)
+from detectors.lateral_movement import (
+    RdpLateralMovementDetector, SmbLateralMovementDetector, DcomLateralMovementDetector,
+    SshLateralMovementDetector, VncLateralMovementDetector, WinRmLateralMovementDetector,
+)
+from detectors.dns_anomalies import (
+    NxdomainDgaDetector, HighEntropyDgaDetector, TxtAbuseDetector, UnusualQtypeDetector,
+    FastFluxDetector, DomainFanoutDetector, DnsFailureRatioDetector, DnsRebindingDetector,
+)
 
 DETECTORS = [
     PortScanDetector,
@@ -53,6 +77,45 @@ DETECTORS = [
     StealthScanDetector,
     DNSTunnelDetector,
     ExfiltrationDetector,
+    FtpBruteForceDetector,
+    RdpBruteForceDetector,
+    SmbBruteForceDetector,
+    TelnetBruteForceDetector,
+    VncBruteForceDetector,
+    DbBruteForceDetector,
+    HttpBeaconingDetector,
+    HttpsBeaconingDetector,
+    DnsBeaconingDetector,
+    LongSleepBeaconingDetector,
+    JitteredBeaconingDetector,
+    NonStdPortBeaconingDetector,
+    FtpExfiltrationDetector,
+    HttpExfiltrationDetector,
+    HttpsExfiltrationDetector,
+    SmtpExfiltrationDetector,
+    DnsExfiltrationDetector,
+    NonStdPortExfiltrationDetector,
+    IcmpTunnelDetector,
+    SshTunnelDetector,
+    HttpTunnelDetector,
+    HttpsTunnelDetector,
+    IodineDnsTunnelDetector,
+    Dnscat2TunnelDetector,
+    RdpLateralMovementDetector,
+    SmbLateralMovementDetector,
+    DcomLateralMovementDetector,
+    SshLateralMovementDetector,
+    VncLateralMovementDetector,
+    WinRmLateralMovementDetector,
+    NxdomainDgaDetector,
+    HighEntropyDgaDetector,
+    TxtAbuseDetector,
+    UnusualQtypeDetector,
+    FastFluxDetector,
+    DomainFanoutDetector,
+    DnsFailureRatioDetector,
+    DnsRebindingDetector,
+    
 ]
 
 
