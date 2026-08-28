@@ -28,7 +28,11 @@ ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")   # $2b$12$....
 MISP_URL    = os.getenv("MISP_URL", "https://192.168.100.20")
 MISP_KEY    = os.getenv("MISP_KEY", "")   # jamais en dur : voir .env
 MISP_VERIFY = False   # certificat auto-signé du lab
-
+# ─── Connexion OpenCTI ────────────────────────────────────────
+OPENCTI_URL         = os.getenv("OPENCTI_URL", "http://192.168.100.50:8080")
+OPENCTI_TOKEN       = os.getenv("OPENCTI_TOKEN", "")   # jamais en dur : voir .env
+OPENCTI_SSL_VERIFY  = False   # pas de TLS sur l'instance du lab
+OPENCTI_ENABLED     = os.getenv("OPENCTI_ENABLED", "true")
 # ─── Seuils de détection ──────────────────────────────────────
 # Chaque détecteur lira son seuil ici (jamais codé en dur dans le détecteur)
 THRESHOLDS = {
