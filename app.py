@@ -188,6 +188,14 @@ def run_detection(logs_dir: Path, store: bool) -> list:
     # ─── Enrichissement CTI (MISP) ───────────────────────────
     # L'enrichissement intervient APRES la detection : la CTI ajoute
     # du contexte aux alertes deja detectees par comportement.
+    # ─── Matching CTI EN AMONT (avant enrichissement aval) ───
+    from cti.upstream_matcher import UpstreamMatcher
+    logs = engine.load_logs() 
+    upstream = UpstreamMatcher()
+    ioc_alerts = upstream.match(logs)      # ← 'logs' = les logs parsés Zeek
+    if ioc_alerts:
+        print(f"[CTI amont] {len(ioc_alerts)} alerte(s) IOC ajoutée(s) au flux.")
+    alerts.extend(ioc_alerts)
     enricher = Enricher()
     alerts = enricher.enrich_all(alerts)
     alerts = Correlator().correlate(alerts)
