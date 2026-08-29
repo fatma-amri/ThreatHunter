@@ -37,6 +37,7 @@ from dashboard.pages.theme import (
     sidebar_state_pill, TOKENS,
 )
 from dashboard.pages.auth import require_auth, logout_button
+from dashboard.pages.advanced_pages import page_investigation, page_attack_matrix
 
 
 def _load_logo_data_uri() -> str | None:
@@ -197,33 +198,15 @@ def threat_flow_map(df: pd.DataFrame):
     return fig
 
 
+# threat_level() / _executive_summary() vivent desormais dans dashboard_data
+# (purs, partages avec l'export PDF). Ces alias gardent les appels existants
+# de ce fichier inchanges.
 def threat_level(k: dict) -> tuple[str, str]:
-    if k["critical"] > 0:
-        return "CRITICAL", f"{k['critical']} active critical alert(s)"
-    if k["high"] > 0:
-        return "ELEVATED", f"{k['high']} high-risk alert(s)"
-    if k["total"] > 0:
-        return "NOMINAL", "no critical or high-risk alerts"
-    return "NOMINAL", "no data for current filters"
+    return data.threat_level(k)
 
 
 def _executive_summary(df: pd.DataFrame, k: dict, level: str) -> str:
-    """Paragraphe narratif genere a partir des KPI reels de la selection —
-    aucune donnee inventee, uniquement une mise en phrase de compute_kpis()."""
-    if df.empty:
-        return "No alerts were recorded for the current selection — nothing to report."
-    top_mitre = _top_list(df, "mitre", 1)
-    technique = f" The most frequently observed technique was {top_mitre[0][0]} ({top_mitre[0][1]} alert(s))." \
-        if top_mitre else ""
-    cti_txt = f" {k['cti_hits']} alert(s) were confirmed against threat intelligence." if k["cti_hits"] else ""
-    corr_txt = f" {k['correlated']} incident(s) correlate activity across multiple detectors." \
-        if k["correlated"] else ""
-    return (
-        f"During the selected period, {k['total']} alert(s) were recorded across "
-        f"{k['distinct_sources']} distinct source(s), including {k['critical']} critical and "
-        f"{k['high']} high-risk event(s). Overall threat level is assessed as {level}."
-        f"{technique}{cti_txt}{corr_txt}"
-    )
+    return data.executive_summary(df, k, level)
 
 
 _SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
@@ -346,6 +329,8 @@ def _gradient_bar_vertical(counts_df, col):
 NAV_ITEMS = [
     ("Overview", "grid_view"),
     ("Alerts", "warning"),
+    ("Investigation", "manage_search"),
+    ("ATT&CK Matrix", "table_chart"),
     ("IOC Intelligence", "fingerprint"),
     ("Network Activity", "lan"),
     ("Threat Timeline", "timeline"),
@@ -682,6 +667,10 @@ def page_alerts(df):
     st.markdown(
         f"src {mono_chip(row['src_ip'])} &nbsp;→&nbsp; dst {mono_chip(row['dst_ip'])}",
         unsafe_allow_html=True)
+    if row["src_ip"] and st.button("Investigate this source →", key="alerts_investigate_src"):
+        st.session_state.focus_entity = row["src_ip"]
+        st.session_state.current_page = "Investigation"
+        st.rerun()
     st.write(row["description"])
     if row["correlated_count"] > 1:
         st.info(f"Correlated incident — {row['correlated_count']} alerts "
@@ -913,7 +902,7 @@ def page_reports(df):
     perforated_divider()
     st.subheader("Full Result Export")
     st.caption(f"{len(df)} alert(s) in current selection — export for hand-off or archival.")
-    exp1, exp2 = st.columns(2)
+    exp1, exp2, exp3 = st.columns(3)
     with exp1:
         st.download_button("Export CSV", icon=":material/download:",
                            data=df.drop(columns=["sev_rank"], errors="ignore").to_csv(index=False).encode("utf-8"),
@@ -931,6 +920,20 @@ def page_reports(df):
                            data=_pretty_json(summary).encode("utf-8"),
                            file_name="threathunter_report_summary.json", mime="application/json",
                            use_container_width=True)
+    with exp3:
+        # Rapport PDF de la SELECTION COURANTE — memes agregations que la page
+        # (dashboard_data). Import paresseux : une lib PDF absente ne doit pas
+        # casser le dashboard.
+        try:
+            from reports.pdf_export import build_pdf
+            st.download_button(
+                "Export PDF", icon=":material/picture_as_pdf:",
+                data=build_pdf(df),
+                file_name="threathunter_report.pdf", mime="application/pdf",
+                use_container_width=True)
+        except Exception as exc:                     # noqa: BLE001
+            st.button("Export PDF", disabled=True, use_container_width=True,
+                      help=f"PDF export unavailable — {exc}")
 
 
 # ─── Page 8 — Settings ──────────────────────────────────────────
@@ -961,6 +964,8 @@ def page_settings(df):
 PAGES = {
     "Overview": page_home,
     "Alerts": page_alerts,
+    "Investigation": page_investigation,
+    "ATT&CK Matrix": page_attack_matrix,
     "IOC Intelligence": page_ioc,
     "Network Activity": page_network,
     "Threat Timeline": page_timeline,
