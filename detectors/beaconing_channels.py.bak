@@ -30,17 +30,6 @@ import pandas as pd
 from detectors.base_detector import BaseDetector
 from core.alerts import Alert
 from core.feature_extractor import FeatureExtractor
-import ipaddress
-
-
-def _is_infra_dst(value) -> bool:
-    """Multicast / link-local / broadcast -> trafic d'infra (mDNS, SSDP...),
-    jamais du C2. Un vrai C2 est sur une IP routable, donc jamais filtre."""
-    try:
-        a = ipaddress.ip_address(str(value))
-        return a.is_multicast or a.is_link_local or a.is_unspecified
-    except ValueError:
-        return False
 
 # Ports de service courants — exclus par le detecteur "port non standard".
 COMMON_PORTS = {20, 21, 22, 23, 25, 53, 80, 110, 143, 389, 443, 445, 465,
@@ -128,8 +117,6 @@ class ChannelBeaconingDetector(BaseDetector):
 
         alerts: List[Alert] = []
         for _, row in suspects.iterrows():
-            if _is_infra_dst(row["dst_ip"]):
-                continue          # ff02::fb, fe80::..., 224.0.0.0/4 -> bruit mDNS, pas du C2
             band = f"jitter <= {max_jitter:.0%}"
             if min_jitter is not None:
                 band = f"{min_jitter:.0%} < jitter <= {max_jitter:.0%}"
