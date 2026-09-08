@@ -937,13 +937,32 @@ def page_reports(df):
 
 
 # ─── Page 8 — Settings ──────────────────────────────────────────
+@st.cache_data(ttl=30, show_spinner=False)
+def _cti_status():
+    """Teste la connexion réelle MISP / OpenCTI (mise en cache 30s)."""
+    misp_ok = opencti_ok = False
+    try:
+        from cti.connector import MISPConnector
+        misp_ok = bool(MISPConnector().connected)
+    except Exception:
+        pass
+    try:
+        from cti.opencti import OpenCTIConnector
+        opencti_ok = bool(OpenCTIConnector().connected)
+    except Exception:
+        pass
+    return misp_ok, opencti_ok
 def page_settings(df):
     section_header("Settings", eyebrow="Technical configuration · read-only")
     st.subheader("Service Status")
     status_row("MongoDB", online="db_error" not in st.session_state,
                 detail="unreachable — degraded mode" if "db_error" in st.session_state else "connected")
-    status_row("MISP", online=True, detail=f"{len(getattr(settings,'CTI_FEEDS',[]))} feed(s) configured")
-    status_row("OpenCTI", online=False, detail="connector implemented, not wired up")
+    misp_ok, opencti_ok = _cti_status()
+    status_row("MISP", online=misp_ok,
+               detail="connected" if misp_ok else "service unreachable (VM offline)")
+    status_row("OpenCTI", online=opencti_ok,
+               detail="connected · hub 3 sources (MISP·AlienVault·CVE)"
+                      if opencti_ok else "connected when VM online · service unreachable")
 
     perforated_divider()
     st.subheader("Database")
